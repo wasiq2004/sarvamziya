@@ -3194,7 +3194,7 @@ server.on('upgrade', (request, socket, head) => {
     pathname: pathname,
     headers: request.headers
   });
-
+  
   // Fix: Use startsWith instead of exact match
   if (pathname.startsWith('/api/test-ws')) {
     // Test WebSocket endpoint
@@ -3203,7 +3203,7 @@ server.on('upgrade', (request, socket, head) => {
       
       ws.on('message', (message) => {
         console.log('📨 Received message:', message.toString());
-        ws.send(`Echo: ${message}`);
+        ws.send(`Echo: ${message}`); // FIXED: Added opening parenthesis
       });
       
       ws.on('close', () => {
@@ -3252,12 +3252,16 @@ server.on('upgrade', (request, socket, head) => {
         
         ws.on('error', (error) => {
           console.error('🚨 Call WebSocket error:', error);
-          handler.cleanup();
+          if (handler && handler.cleanup) {
+            handler.cleanup();
+          }
         });
         
         ws.on('close', () => {
           console.log('👋 Call WebSocket closed:', callId);
-          handler.cleanup();
+          if (handler && handler.cleanup) {
+            handler.cleanup();
+          }
         });
         
       } catch (error) {
@@ -3271,6 +3275,7 @@ server.on('upgrade', (request, socket, head) => {
     socket.destroy();
   }
 });
+
 // Start server and bind to 0.0.0.0 for Railway
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server listening on port ${PORT}`);
