@@ -3184,6 +3184,7 @@ app.get("/db-conn-status", async (req, res) => {
     res.json({ success: false, error: error.message || "No message" });
   }
 });
+
 server.on('upgrade', (request, socket, head) => {
   const pathname = url.parse(request.url).pathname;
   
@@ -3194,8 +3195,8 @@ server.on('upgrade', (request, socket, head) => {
     headers: request.headers
   });
 
-  // Route based on pathname
-  if (pathname === '/api/test-ws') {
+  // Fix: Use startsWith instead of exact match
+  if (pathname.startsWith('/api/test-ws')) {
     // Test WebSocket endpoint
     wss.handleUpgrade(request, socket, head, (ws) => {
       console.log('✅ Test WebSocket connected');
@@ -3222,8 +3223,9 @@ server.on('upgrade', (request, socket, head) => {
     wss.handleUpgrade(request, socket, head, (ws) => {
       console.log('✅ Call WebSocket connected');
       
-      // Get callId from query params
-      const queryParams = url.parse(request.url, true).query;
+      // Parse query parameters properly
+      const parsedUrl = url.parse(request.url, true);
+      const queryParams = parsedUrl.query;
       const callId = queryParams.callId;
       
       if (!callId) {
@@ -3234,10 +3236,9 @@ server.on('upgrade', (request, socket, head) => {
       
       console.log('📞 New call connection:', callId);
       
-      // Import your MediaStreamHandler here
+      // Your MediaStreamHandler code here
       const MediaStreamHandler = require('./services/mediaStreamHandler');
       
-      // Check if MediaStreamHandler is available
       if (typeof MediaStreamHandler !== 'function') {
         console.error('❌ MediaStreamHandler is not available');
         ws.close(1011, 'Service unavailable');
@@ -3247,10 +3248,8 @@ server.on('upgrade', (request, socket, head) => {
       console.log('✅ MediaStreamHandler is available, handling connection...');
       
       try {
-        // Create handler instance
         const handler = new MediaStreamHandler(ws, callId);
         
-        // Handle errors
         ws.on('error', (error) => {
           console.error('🚨 Call WebSocket error:', error);
           handler.cleanup();
@@ -3268,7 +3267,6 @@ server.on('upgrade', (request, socket, head) => {
     });
   } 
   else {
-    // Unknown WebSocket endpoint
     console.log('❌ Unknown WebSocket endpoint:', pathname);
     socket.destroy();
   }
