@@ -32,7 +32,8 @@ const walletService = new WalletService(mysqlPool);
 // Init server
 const app = express();
 const PORT = Number(process.env.PORT) || 5000;
-expressWs(app);
+const server = require('http').createServer(app);
+const expressWsInstance = expressWs(app, server);
 
 // ADD THIS BLOCK HERE:
 console.log('=== ENVIRONMENT CHECK ===');
@@ -66,6 +67,8 @@ if (process.env.DEEPGRAM_API_KEY && process.env.GOOGLE_GEMINI_API_KEY) {
 }
 
 const agentService = new AgentService(mysqlPool);
+
+console.log('✅ WebSocket support enabled on HTTP server');
 
 // === ADD THIS BLOCK ===
 if (!process.env.ELEVEN_LABS_API_KEY) {
@@ -3181,8 +3184,9 @@ app.get("/db-conn-status", async (req, res) => {
 });
 
 // Start server and bind to 0.0.0.0 for Railway
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Server listening on port ${PORT}`);
-  console.log(`Frontend URL: ${FRONTEND_URL}`);
-  console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+server.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(`📡 WebSocket endpoint: wss://ziyavoice-production.up.railway.app/api/call`);
+  console.log(`🌐 Frontend URL: ${FRONTEND_URL}`);
+  console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
