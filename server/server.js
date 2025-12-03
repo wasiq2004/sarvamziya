@@ -3124,8 +3124,8 @@ app.post('/api/campaigns/:id/stop', async (req, res) => {
     const updatedCampaign = await campaignService.stopCampaign(id, userId);
   
     res.json({ success: true, data: updatedCampaign });
-  
-  } catch (error) {
+  } 
+    catch (error) {
     console.error('Error stopping campaign:', error);
     res.status(500).json({ success: false, message: error.message });
   }
