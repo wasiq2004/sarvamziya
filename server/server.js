@@ -2504,54 +2504,31 @@ app.ws('/api/stt', function (ws, req) {
 });
 // WebSocket for Twilio → Deepgram → Gemini → ElevenLabs
 app.ws('/api/call', (ws, req) => {
-
-  console.log('🎯 ========== WEBSOCKET CONNECTION ATTEMPT ==========');
-  console.log('   Request URL:', req.url);
-  console.log('   Full path:', req._parsedUrl ? req._parsedUrl.path : 'not available');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🔌 TWILIO WEBSOCKET CONNECTION RECEIVED!');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('   URL:', req.url);
+  console.log('   IP:', req.headers['x-forwarded-for'] || req.connection.remoteAddress);
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
 
   if (!mediaStreamHandler) {
-    console.error('❌ MediaStreamHandler not initialized!');
-    ws.close(1011, 'MediaStreamHandler not available');
+    console.error('❌ FATAL: MediaStreamHandler is NOT initialized!');
+    ws.send(JSON.stringify({
+      event: 'error',
+      message: 'Voice pipeline not configured. Missing API keys.'
+    }));
+    ws.close();
     return;
   }
-  let callId = null;
-  let agentId = null;
-  let contactId = null;
+
+  console.log('✅ Passing connection to MediaStreamHandler...');
 
   try {
-    const urlParts = req.url.split('?');
-    const queryString = urlParts[1] || '';
-    const params = new URLSearchParams(queryString);
-
-    callId = params.get('callId');
-    agentId = params.get('agentId');
-    contactId = params.get('contactId');
-
-    console.log('   Parsed params:', { callId, agentId, contactId });
+    mediaStreamHandler.handleConnection(ws, req);
+    console.log('✅ Connection handed off to MediaStreamHandler');
   } catch (err) {
-    console.error('⚠️ Failed to parse query params:', err);
-  }
-
-  if (!callId && !contactId) {
-    console.log('ℹ️ No callId/contactId — assuming Twilio connection.');
-  }
-  const modifiedReq = {
-    ...req,
-    query: {
-      callId: callId || contactId || null,
-      agentId: agentId || null,
-      contactId: contactId || null,
-    },
-    url: req.url
-  };
-
-  console.log('📦 Final query object passed to handler:', modifiedReq.query);
-  try {
-    mediaStreamHandler.handleConnection(ws, modifiedReq);
-    console.log("🚀 mediaStreamHandler.handleConnection executed successfully");
-  } catch (error) {
-    console.error('❌ Error in mediaStreamHandler.handleConnection:', error);
-    ws.close(1011, 'Internal server error');
+    console.error('❌ Error in MediaStreamHandler.handleConnection:', err);
+    ws.close();
   }
 });
 // WebSocket endpoint for voice stream (frontend voice chat + Twilio calls)
