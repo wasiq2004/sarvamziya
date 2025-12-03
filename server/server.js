@@ -2093,9 +2093,7 @@ app.delete('/api/twilio/accounts/:accountId', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
-/// Replace your /api/twilio/voice endpoint in server.js (around line 1150)
-
+// REPLACE your /api/twilio/voice endpoint in server.js with this version:
 app.post('/api/twilio/voice', async (req, res) => {
   try {
     const { CallSid, From, To } = req.body;
@@ -2106,7 +2104,6 @@ app.post('/api/twilio/voice', async (req, res) => {
     console.log('   From:', From);
     console.log('   To:', To);
     console.log('   Query params:', { userId, campaignId, agentId, callId });
-
     // Validate required parameters
     if (!agentId) {
       console.error('❌ Missing agentId in voice webhook');
@@ -2118,33 +2115,44 @@ app.post('/api/twilio/voice', async (req, res) => {
       res.type('text/xml');
       return res.send(errorTwiml);
     }
-
     // Build WebSocket URL
     const appUrl = process.env.APP_URL;
+    if (!appUrl) {
+      console.error('❌ APP_URL not configured!');
+      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+    <Say>Server configuration error.</Say>
+    <Hangup/>
+</Response>`;
+      res.type('text/xml');
+      return res.send(errorTwiml);
+    }
     const wsUrl = appUrl.replace('https://', 'wss://').replace('http://', 'ws://');
-    
     // Use callId if provided, otherwise use CallSid
     const actualCallId = callId || CallSid;
-    
     // Build stream URL with all necessary parameters
     const streamUrl = `${wsUrl}/api/call?callId=${actualCallId}&agentId=${agentId}&contactId=${CallSid}`;
-
     console.log('🔗 WebSocket Stream URL:', streamUrl);
+    // ✅ CRITICAL FIX: Use VoiceResponse from Twilio SDK
+    const VoiceResponse = require('twilio').twiml.VoiceResponse;
+    const response = new VoiceResponse();
+    // Add a brief pause to ensure call is fully connected
+    response.pause({ length: 1 });
+    // Create the Stream
+    const connect = response.connect();
+    connect.stream({
+      url: streamUrl,
+      name: `stream_${actualCallId}`
+    });
 
-    // Generate TwiML
-    const twiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Connect>
-        <Stream url="${streamUrl}" />
-    </Connect>
-</Response>`;
-
-    console.log('📄 Sending TwiML to Twilio');
+    // Generate TwiML string
+    const twiml = response.toString();
+    console.log('📄 Generated TwiML:');
+    console.log(twiml);
     console.log('=============================================');
 
     res.type('text/xml');
     res.send(twiml);
-
     // Update call status in database (async, don't block response)
     if (callId) {
       mysqlPool.execute(
@@ -2156,17 +2164,15 @@ app.post('/api/twilio/voice', async (req, res) => {
     console.error('❌ Voice webhook error:', error);
     
     // Return error TwiML instead of crashing
-    const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say>We're experiencing technical difficulties. Please try again later.</Say>
-    <Hangup/>
-</Response>`;
+    const VoiceResponse = require('twilio').twiml.VoiceResponse;
+    const response = new VoiceResponse();
+    response.say("We're experiencing technical difficulties. Please try again later.");
+    response.hangup();
     
     res.type('text/xml');
-    res.send(errorTwiml);
+    res.send(response.toString());
   }
 });
-
 // Twilio Status Callback
 app.post('/api/twilio/callback', async (req, res) => {
   try {
