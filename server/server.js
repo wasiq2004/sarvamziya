@@ -3121,18 +3121,15 @@ app.post('/api/campaigns/:id/stop', async (req, res) => {
     
     if (!userId) {
       return res.status(400).json({ success: false, message: 'User ID is required' });
-    }
-    
     const updatedCampaign = await campaignService.stopCampaign(id, userId);
-    
+  
     res.json({ success: true, data: updatedCampaign });
-    
+  
   } catch (error) {
     console.error('Error stopping campaign:', error);
     res.status(500).json({ success: false, message: error.message });
   }
 });
-
 // Process campaign calls (runs in background)
 async function processCampaignCalls(campaignId, userId, campaign, records) {
   console.log(`Processing campaign ${campaignId} with ${records.length} records`);
@@ -3145,7 +3142,6 @@ async function processCampaignCalls(campaignId, userId, campaign, records) {
     console.error('Twilio number not found:', campaign.callerPhone);
     return;
   }
-  
   // Process records sequentially with delay
   for (const record of records) {
     try {
@@ -3155,10 +3151,8 @@ async function processCampaignCalls(campaignId, userId, campaign, records) {
         console.log('Campaign stopped, exiting...');
         break;
       }
-      
       // Update record status to in-progress
       await campaignService.updateRecordStatus(record.id, 'in-progress');
-      
       // Make the call
       const callId = uuidv4();
       const appUrl = process.env.APP_URL;
@@ -3173,7 +3167,6 @@ async function processCampaignCalls(campaignId, userId, campaign, records) {
         appUrl: cleanAppUrl
       });
       // Add this AFTER creating the HTTP server and BEFORE defining routes:
-
 // ✅ Comprehensive WebSocket connection monitoring
 server.on('upgrade', (request, socket, head) => {
   console.log('🔄 ========== HTTP UPGRADE REQUEST ==========');
@@ -3235,97 +3228,115 @@ app.get("/db-conn-status", async (req, res) => {
   }
 });
 
+// ===========================================
+// 🔎 GLOBAL WEBSOCKET + HTTP REQUEST LOGGING
+// ==========================================
+server.on('upgrade', (request, socket, head) => {
+  console.log('🔄 ========== HTTP UPGRADE REQUEST ==========');
+  console.log('   URL:', request.url);
+  console.log('   Headers:', {
+    upgrade: request.headers.upgrade,
+    connection: request.headers.connection,
+    'sec-websocket-version': request.headers['sec-websocket-version'],
+    'sec-websocket-key': request.headers['sec-websocket-key'] ? 'present' : 'missing',
+    origin: request.headers.origin || 'not provided',
+    host: request.headers.host
+  });
+  console.log('   Remote Address:', socket.remoteAddress);
+  console.log('============================================');
+});
+// Log important HTTP requests
+app.use((req, res, next) => {
+  const isWebSocket = req.headers.upgrade === 'websocket';
+  
+  if (isWebSocket || req.url.includes('/api/call') || req.url.includes('/api/twilio')) {
+    console.log(`📥 ${req.method} ${req.url}`, {
+      headers: {
+        upgrade: req.headers.upgrade,
+        connection: req.headers.connection,
+        'user-agent': req.headers['user-agent']?.substring(0, 50)
+      }
+    });
+  }
+  next();
+});
+// ========================================================
+// 🎯 MAIN WEBSOCKET UPGRADE HANDLER
+// ========================================================
 server.on('upgrade', (request, socket, head) => {
   const pathname = url.parse(request.url).pathname;
-  
+
   console.log('🎯 ========== WEBSOCKET CONNECTION ATTEMPT ==========');
   console.log('🔌 WebSocket upgrade request received:', {
     url: request.url,
-    pathname: pathname,
+    pathname,
     headers: request.headers
   });
-  
-  // Fix: Use startsWith instead of exact match
+  // ---------- TEST WS ENDPOINT ----------
   if (pathname.startsWith('/api/test-ws')) {
-    // Test WebSocket endpoint
     wss.handleUpgrade(request, socket, head, (ws) => {
       console.log('✅ Test WebSocket connected');
-      
+
       ws.on('message', (message) => {
         console.log('📨 Received message:', message.toString());
-        ws.send(`Echo: ${message}`); // FIXED: Added opening parenthesis
+        ws.send(`Echo: ${message}`);
       });
-      
-      ws.on('close', () => {
-        console.log('👋 Test WebSocket closed');
-      });
-      
-      ws.on('error', (error) => {
-        console.error('🚨 Test WebSocket error:', error);
-      });
-      
-      // Send initial message
-      ws.send(JSON.stringify({ type: 'connected', message: 'Test WebSocket connected successfully!' }));
+      ws.on('close', () => console.log('👋 Test WebSocket closed'));
+      ws.on('error', (error) => console.error('🚨 Test WebSocket error:', error));
+
+      ws.send(JSON.stringify({
+        type: 'connected',
+        message: 'Test WebSocket connected successfully!'
+      }));
     });
-  } 
+  }
+  // ---------- CALL WS ENDPOINT ----------
   else if (pathname.startsWith('/api/call')) {
-    // Your call WebSocket endpoint
     wss.handleUpgrade(request, socket, head, (ws) => {
       console.log('✅ Call WebSocket connected');
-      
-      // Parse query parameters properly
+
       const parsedUrl = url.parse(request.url, true);
-      const queryParams = parsedUrl.query;
-      const callId = queryParams.callId;
-      
+      const callId = parsedUrl.query.callId;
+
       if (!callId) {
         console.error('❌ No callId provided');
         ws.close(1008, 'callId is required');
         return;
       }
-      
       console.log('📞 New call connection:', callId);
-      
-      // Your MediaStreamHandler code here
+
       const MediaStreamHandler = require('./services/mediaStreamHandler');
-      
       if (typeof MediaStreamHandler !== 'function') {
         console.error('❌ MediaStreamHandler is not available');
         ws.close(1011, 'Service unavailable');
         return;
       }
-      
-      console.log('✅ MediaStreamHandler is available, handling connection...');
-      
+
       try {
         const handler = new MediaStreamHandler(ws, callId);
-        
+
         ws.on('error', (error) => {
           console.error('🚨 Call WebSocket error:', error);
-          if (handler && handler.cleanup) {
-            handler.cleanup();
-          }
+          handler?.cleanup?.();
         });
-        
+
         ws.on('close', () => {
           console.log('👋 Call WebSocket closed:', callId);
-          if (handler && handler.cleanup) {
-            handler.cleanup();
-          }
+          handler?.cleanup?.();
         });
-        
+
       } catch (error) {
         console.error('🚨 Error creating MediaStreamHandler:', error);
         ws.close(1011, 'Internal server error');
       }
     });
-  } 
+  }
+  // ---------- UNKNOWN ENDPOINT ----------
   else {
     console.log('❌ Unknown WebSocket endpoint:', pathname);
     socket.destroy();
   }
 });
-
 // Start server and bind to 0.0.0.0 for Railway
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server listening on port ${PORT}`);
