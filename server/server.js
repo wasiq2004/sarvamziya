@@ -2094,6 +2094,8 @@ app.delete('/api/twilio/accounts/:accountId', async (req, res) => {
   }
 });
 // REPLACE your /api/twilio/voice endpoint in server.js with this version:
+// ALTERNATIVE VERSION with explicit track settings:
+
 app.post('/api/twilio/voice', async (req, res) => {
   try {
     const { CallSid, From, To } = req.body;
@@ -2104,56 +2106,68 @@ app.post('/api/twilio/voice', async (req, res) => {
     console.log('   From:', From);
     console.log('   To:', To);
     console.log('   Query params:', { userId, campaignId, agentId, callId });
-    // Validate required parameters
+
     if (!agentId) {
       console.error('❌ Missing agentId in voice webhook');
-      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say>Sorry, there was a configuration error. Please contact support.</Say>
-    <Hangup/>
-</Response>`;
+      const VoiceResponse = require('twilio').twiml.VoiceResponse;
+      const response = new VoiceResponse();
+      response.say("Configuration error. Agent not specified.");
+      response.hangup();
       res.type('text/xml');
-      return res.send(errorTwiml);
+      return res.send(response.toString());
     }
-    // Build WebSocket URL
+
     const appUrl = process.env.APP_URL;
     if (!appUrl) {
       console.error('❌ APP_URL not configured!');
-      const errorTwiml = `<?xml version="1.0" encoding="UTF-8"?>
-<Response>
-    <Say>Server configuration error.</Say>
-    <Hangup/>
-</Response>`;
+      const VoiceResponse = require('twilio').twiml.VoiceResponse;
+      const response = new VoiceResponse();
+      response.say("Server configuration error.");
+      response.hangup();
       res.type('text/xml');
-      return res.send(errorTwiml);
+      return res.send(response.toString());
     }
+
     const wsUrl = appUrl.replace('https://', 'wss://').replace('http://', 'ws://');
-    // Use callId if provided, otherwise use CallSid
     const actualCallId = callId || CallSid;
-    // Build stream URL with all necessary parameters
     const streamUrl = `${wsUrl}/api/call?callId=${actualCallId}&agentId=${agentId}&contactId=${CallSid}`;
+
     console.log('🔗 WebSocket Stream URL:', streamUrl);
-    // ✅ CRITICAL FIX: Use VoiceResponse from Twilio SDK
+
+    // ✅ Create proper TwiML with Twilio SDK
     const VoiceResponse = require('twilio').twiml.VoiceResponse;
     const response = new VoiceResponse();
-    // Add a brief pause to ensure call is fully connected
+    
+    // Start with a greeting so user knows call connected
+    response.say({
+      voice: 'Polly.Joanna'
+    }, 'Please wait while I connect you to an agent.');
+    
+    // Small pause
     response.pause({ length: 1 });
-    // Create the Stream
+    
+    // Create Connect verb with Stream
     const connect = response.connect();
-    connect.stream({
+    const stream = connect.stream({
       url: streamUrl,
       name: `stream_${actualCallId}`
     });
+    
+    // ✅ CRITICAL: Add parameters to stream
+    stream.parameter({ name: 'callId', value: actualCallId });
+    stream.parameter({ name: 'agentId', value: agentId });
+    stream.parameter({ name: 'userId', value: userId || '' });
 
-    // Generate TwiML string
     const twiml = response.toString();
+
     console.log('📄 Generated TwiML:');
     console.log(twiml);
     console.log('=============================================');
 
     res.type('text/xml');
     res.send(twiml);
-    // Update call status in database (async, don't block response)
+
+    // Update call status
     if (callId) {
       mysqlPool.execute(
         'UPDATE calls SET status = ? WHERE id = ?',
@@ -2163,10 +2177,9 @@ app.post('/api/twilio/voice', async (req, res) => {
   } catch (error) {
     console.error('❌ Voice webhook error:', error);
     
-    // Return error TwiML instead of crashing
     const VoiceResponse = require('twilio').twiml.VoiceResponse;
     const response = new VoiceResponse();
-    response.say("We're experiencing technical difficulties. Please try again later.");
+    response.say("Technical error occurred.");
     response.hangup();
     
     res.type('text/xml');
@@ -3159,7 +3172,38 @@ async function processCampaignCalls(campaignId, userId, campaign, records) {
         callId: callId,
         appUrl: cleanAppUrl
       });
-      
+      // Add this AFTER creating the HTTP server and BEFORE defining routes:
+
+// ✅ Comprehensive WebSocket connection monitoring
+server.on('upgrade', (request, socket, head) => {
+  console.log('🔄 ========== HTTP UPGRADE REQUEST ==========');
+  console.log('   URL:', request.url);
+  console.log('   Headers:', {
+    upgrade: request.headers.upgrade,
+    connection: request.headers.connection,
+    'sec-websocket-version': request.headers['sec-websocket-version'],
+    'sec-websocket-key': request.headers['sec-websocket-key'] ? 'present' : 'missing',
+    origin: request.headers.origin || 'not provided',
+    host: request.headers.host
+  });
+  console.log('   Remote Address:', socket.remoteAddress);
+  console.log('============================================');
+});
+
+// ✅ Log all incoming HTTP requests to spot patterns
+app.use((req, res, next) => {
+  const isWebSocket = req.headers.upgrade === 'websocket';
+  if (isWebSocket || req.url.includes('/api/call') || req.url.includes('/api/twilio')) {
+    console.log(`📥 ${req.method} ${req.url}`, {
+      headers: {
+        upgrade: req.headers.upgrade,
+        connection: req.headers.connection,
+        'user-agent': req.headers['user-agent']?.substring(0, 50)
+      }
+    });
+  }
+  next();
+});
       // Update record with call SID
       await campaignService.updateRecordCallSid(record.id, call.sid);
       
