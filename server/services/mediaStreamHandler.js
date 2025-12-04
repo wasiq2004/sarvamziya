@@ -184,14 +184,18 @@ ws.on("message", async (message) => {
                 }
             });
 
-            deepgramLive.on("Error", (error) => {
-                console.error("❌ Deepgram error:", error);
-            });
+             deepgramLive.on("Error", (error) => {
+                            console.error("❌ Deepgram error:", error.message || "Unknown error");
+                            if (error.message && !error.message.includes("NET_")) {
+                            }
+                        });
+                        deepgramLive.on("Open", () => {
+                            console.log("✅ Deepgram opened");
+                        });
 
-            deepgramLive.on("Open", () => {
-                console.log("✅ Deepgram opened");
-            });
-
+                        deepgramLive.on("Close", () => {
+                            console.log("⚠️ Deepgram connection closed");
+                        });
             // Send greeting after a short delay
             setTimeout(async () => {
                 try {
