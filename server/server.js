@@ -38,10 +38,10 @@ const expressWsInstance = expressWs(app, server, {
     perMessageDeflate: false,
     clientTracking: true,
     maxPayload: 100 * 1024 * 1024,
-       binary: true
+    skipUTF8Validation: true  // ← THIS IS THE CRITICAL FIX
   }
 });
-console.log('✅ WebSocket support enabled with BINARY frame support for Twilio');
+console.log('✅ WebSocket with skipUTF8Validation enabled');
 
 // ADD THIS BLOCK HERE:
 console.log('=== ENVIRONMENT CHECK ===');
