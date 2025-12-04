@@ -131,7 +131,7 @@ ws.on("message", async (message) => {
                     const AgentService = require('./agentService.js');
                     const agentService = new AgentService(require('../config/database.js').default);
                     
-                    const agent = await agentService.getAgentById('system', agentId);
+                    const agent = await agentService.getAgentById(userId, agentId);
                     if (agent) {
                         agentPrompt = agent.identity || agentPrompt;
                         agentVoiceId = agent.voiceId || agentVoiceId;
