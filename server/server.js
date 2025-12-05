@@ -2563,25 +2563,10 @@ app.ws('/voice-stream', async function (ws, req) {  // ✅ ADDED async
   console.log('Call ID:', callId);
   console.log('Agent ID:', agentId);
   console.log('User ID:', userId);
-  
-  // Map voice names to ElevenLabs voice IDs
-  const voiceIdMap = {
-    'eleven-rachel': '21m00Tcm4TlvDq8ikWAM',      // Rachel - Professional female
-    'eleven-domi': 'AZnzlk1mvXvNF0XQwSqT',         // Domi - Warm male
-    'eleven-bella': 'EXAVITQu4vr4xnSDxMaL',         // Bella - Bright female
-    'eleven-antoni': 'ErXwobaYp0eMQ54XLiQy',        // Antoni - Deep male
-    'eleven-elli': 'MF3mGyEYCHltNiPm4XZK',         // Elli - Expressive female
-    'eleven-josh': 'TxGEqnHWrfWFTfGW9XjX',         // Josh - Strong male
-    'eleven-arnold': 'VR6AewLVsFNTJdrC4xPG',       // Arnold - Deep US male
-    'eleven-adam': 'pFZP5JQG7iQjIQuC4Hyc',        // Adam - Deep UK male
-    'eleven-sam': 'yoZ06aMxZJJ28mfd3POQ'          // Sam - Conversational male
-  };
-  
-  // Get agent voice ID from query params or use default
-  let voiceIdentifier = voiceId || 'eleven-rachel';
-  // Map the voice identifier to actual ElevenLabs voice ID
-  let agentVoiceId = voiceIdMap[voiceIdentifier] || voiceIdentifier;
-  // Initialize agent identity and name
+
+// Map voice names to ElevenLabs voice IDs
+ 
+  let agentVoiceId = voiceId || '21m00Tcm4TlvDq8ikWAM'; // Default to Rachel if not provided
   // For frontend chat, use identity from query params if provided
   let agentIdentity = identity || 'You are a helpful AI assistant.';
   let agentName = 'AI Assistant';
@@ -2589,14 +2574,14 @@ app.ws('/voice-stream', async function (ws, req) {  // ✅ ADDED async
   console.log('Using ElevenLabs voice ID:', agentVoiceId);
   
   // For Twilio calls, fetch agent voice and identity from database if agentId is provided
+// For Twilio calls, fetch agent voice and identity from database if agentId is provided
   if (agentId) {
     agentService.getAgentById('system', agentId).then(agent => {
       if (agent) {
-        // Get voice ID
+        // Get voice ID - use it directly, no mapping needed
         if (agent.voiceId) {
-          voiceIdentifier = agent.voiceId;
-          agentVoiceId = voiceIdMap[voiceIdentifier] || voiceIdentifier;
-          console.log('Fetched agent voice ID from database:', voiceIdentifier, '→', agentVoiceId);
+          agentVoiceId = agent.voiceId; // Use the voice ID directly from database
+          console.log('Fetched agent voice ID from database:', agentVoiceId);
         }
         // Get agent identity/prompt from database (override if not provided in query)
         if (agent.identity && !identity) {
