@@ -1,3 +1,9 @@
+const { createClient, LiveTranscriptionEvents } = require("@deepgram/sdk");
+const { LLMService } = require("../llmService.js");
+const nodeFetch = require("node-fetch");
+
+const sessions = new Map();
+
 class MediaStreamHandler {
     constructor(deepgramApiKey, geminiApiKey, campaignService) {
         if (!deepgramApiKey) throw new Error("Missing Deepgram API Key");
