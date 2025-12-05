@@ -2492,6 +2492,84 @@ app.get('/api/voices/elevenlabs', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+
+// ADD THIS NEW ENDPOINT - Add it after the existing /api/voices/elevenlabs endpoint
+
+app.get('/api/voices/elevenlabs/list', async (req, res) => {
+  try {
+    // Get ElevenLabs API key from environment variables
+    const apiKey = process.env.ELEVEN_LABS_API_KEY || process.env.ELEVENLABS_API_KEY;
+    
+    if (!apiKey) {
+      console.error('❌ ElevenLabs API key not configured on server');
+      return res.status(500).json({ 
+        success: false, 
+        message: 'ElevenLabs API key not configured on server. Please add ELEVEN_LABS_API_KEY to environment variables.' 
+      });
+    }
+
+    console.log('✅ Fetching voices from ElevenLabs API with key:', apiKey.substring(0, 4) + '...');
+
+    // Fetch voices from ElevenLabs API
+    const response = await nodeFetch('https://api.elevenlabs.io/v1/voices', {
+      headers: {
+        'xi-api-key': apiKey
+      }
+    });
+
+    console.log('ElevenLabs API response status:', response.status);
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('❌ ElevenLabs API error:', response.status, errorText);
+      
+      // Check if the response is HTML (error page)
+      if (errorText.startsWith('<!DOCTYPE') || errorText.includes('<html')) {
+        return res.status(500).json({ 
+          success: false, 
+          message: 'ElevenLabs API returned an HTML error page. Check API key and network connectivity.' 
+        });
+      }
+      
+      return res.status(response.status).json({ 
+        success: false, 
+        message: `ElevenLabs API error: ${response.statusText} - ${errorText}` 
+      });
+    }
+
+    const contentType = response.headers.get('content-type');
+    if (!contentType || !contentType.includes('application/json')) {
+      const errorText = await response.text();
+      console.error('❌ ElevenLabs API returned non-JSON response:', errorText.substring(0, 200));
+      return res.status(500).json({ 
+        success: false, 
+        message: 'ElevenLabs API returned invalid response format. Expected JSON.' 
+      });
+    }
+
+    const data = await response.json();
+    
+    console.log(`✅ Successfully fetched ${data.voices?.length || 0} voices from ElevenLabs`);
+    
+    // Return voices with the voice_id as the id field (not mapped)
+    res.json({ 
+      success: true, 
+      voices: data.voices.map(voice => ({
+        voice_id: voice.voice_id,  // Keep the actual ElevenLabs voice ID
+        name: voice.name,
+        category: voice.category || 'uncategorized',
+        preview_url: voice.preview_url,
+        labels: voice.labels || {}
+      }))
+    });
+  } catch (error) {
+    console.error('❌ Error fetching ElevenLabs voices:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: `Error fetching ElevenLabs voices: ${error.message}` 
+    });
+  }
+});
 // Voice preview endpoint
 app.post('/api/voices/elevenlabs/preview', async (req, res) => {
   try {
