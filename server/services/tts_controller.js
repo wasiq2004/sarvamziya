@@ -102,7 +102,7 @@ async function generateElevenLabsTTS(text, options) {
                         style: 0.0,
                         use_speaker_boost: true,
                     },
-                    output_format: "ulaw_8000",
+                    output_format: options.output_format || options.format || "ulaw_8000",
                 }),
             }
         );
