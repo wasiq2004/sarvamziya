@@ -60,9 +60,10 @@ async function sarvamTTS(text, options = {}) {
 
         const audioBuffer = await response.buffer();
         console.log(`[TTS] Audio received: ${audioBuffer.length} bytes`);
-
-        // Convert to ulaw_8000 format for Twilio compatibility
-        // Note: Sarvam returns mp3/wav/pcm, we need to convert to ulaw for Twilio
+         if (options.skipConversion) {
+            console.log(`[TTS] Skipping conversion, returning ${format}`);
+            return audioBuffer;
+        }
         const ulawBuffer = await convertToUlaw(audioBuffer, format);
         
         console.log(`[TTS] Converted to ulaw_8000: ${ulawBuffer.length} bytes`);
