@@ -138,40 +138,53 @@ class GoogleVoiceStreamHandler {
     }
 
     async transcribeAudio(audioChunks, ApiKey) {
-        // Combine chunks
-        // Chunks are base64 strings
-        const combinedBase64 = audioChunks.join('');
+        try {
+            // Combine chunks - these are base64 strings from the frontend
+            const combinedBase64 = audioChunks.join('');
 
-        // Google STT REST API
-        // Docs: https://cloud.google.com/speech-to-text/docs/reference/rest/v1/speech/recognize
-        const response = await nodeFetch(`https://speech.googleapis.com/v1/speech:recognize?key=${ApiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                config: {
-                    encoding: 'LINEAR16',
-                    sampleRateHertz: 16000,
-                    languageCode: 'en-US', // Default to US English
-                    enableAutomaticPunctuation: true
-                },
-                audio: {
-                    content: combinedBase64
-                }
-            })
-        });
+            console.log(`[GoogleVoice] Transcribing ${audioChunks.length} chunks, total base64 length: ${combinedBase64.length}`);
 
-        const data = await response.json();
+            // Google STT REST API
+            const response = await nodeFetch(`https://speech.googleapis.com/v1/speech:recognize?key=${ApiKey}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    config: {
+                        encoding: 'LINEAR16',
+                        sampleRateHertz: 16000,
+                        languageCode: 'en-US',
+                        enableAutomaticPunctuation: true
+                    },
+                    audio: {
+                        content: combinedBase64
+                    }
+                })
+            });
 
-        if (data.error) {
-            throw new Error(`Google STT Error: ${data.error.message}`);
+            const data = await response.json();
+
+            console.log('[GoogleVoice] STT Response:', JSON.stringify(data).substring(0, 200));
+
+            if (data.error) {
+                console.error('[GoogleVoice] STT Error:', data.error);
+                throw new Error(`Google STT Error: ${data.error.message}`);
+            }
+
+            if (!data.results || data.results.length === 0) {
+                console.log('[GoogleVoice] No speech detected in audio');
+                return null;
+            }
+
+            const transcript = data.results
+                .map(result => result.alternatives[0].transcript)
+                .join(' ')
+                .trim();
+
+            return transcript;
+        } catch (error) {
+            console.error('[GoogleVoice] Transcription error:', error);
+            throw error;
         }
-
-        if (!data.results || data.results.length === 0) return null;
-
-        return data.results
-            .map(result => result.alternatives[0].transcript)
-            .join(' ')
-            .trim();
     }
 
     async generateResponse(transcript, systemPrompt, ApiKey) {
@@ -195,13 +208,23 @@ class GoogleVoiceStreamHandler {
 
         return data.candidates?.[0]?.content?.parts?.[0]?.text || "I'm sorry, I couldn't understand that.";
     }
+
     async generateAudio(text, voiceId, apiKey) {
+        // CHECK FOR SARVAM VOICE
+        // The frontend sends just the speaker name for Sarvam (e.g. "anushka"), 
+        // OR it might send a prefixed ID if we changed that logic.
+        // Based on previous context, user was adding "sarvam" provider.
+        // Let's assume if the ID doesn't look like an ElevenLabs ID (usually 20 chars), it might be Sarvam, 
+        // OR we specifically check against known Sarvam names.
+
         const sarvamSpeakers = [
             'anushka', 'abhilash', 'chitra', 'meera', 'arvind',
             'manisha', 'vidya', 'arya', 'karun', 'hitesh'
         ];
+
         // If voiceId matches a Sarvam speaker or starts with 'sarvam:'
         const isSarvam = sarvamSpeakers.includes(voiceId) || voiceId.startsWith('sarvam:');
+
         if (isSarvam) {
             const speaker = voiceId.replace('sarvam:', '');
             console.log(`[GoogleVoice] Generating Sarvam audio for speaker: ${speaker}`);
@@ -224,6 +247,9 @@ class GoogleVoiceStreamHandler {
                 throw new Error(`Sarvam TTS Failed: ${err.message}`);
             }
         }
+
+        // DEFAULT: ELEVEN LABS
+        // Use mp3_44100_128 which is standard and plays everywhere
         console.log(`[GoogleVoice] Generating ElevenLabs audio for voice: ${voiceId}`);
         const response = await nodeFetch(`https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_44100_128`, {
             method: 'POST',
