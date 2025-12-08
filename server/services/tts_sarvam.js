@@ -32,7 +32,7 @@ async function sarvamTTS(text, options = {}) {
                     inputs: [text],
                     target_language_code: language,
                     speaker: speaker,
-                    model: "bulbul:v1",
+                    model: "bulbul:v2",
                     enable_preprocessing: true
                 }),
             }
