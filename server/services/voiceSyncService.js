@@ -1,11 +1,6 @@
 const nodeFetch = require("node-fetch");
 const { v4: uuidv4 } = require("uuid");
 
-/**
- * Voice Sync Service
- * Fetches and normalizes voice lists from multiple TTS providers
- * Stores voices in database with provider-specific metadata
- */
 class VoiceSyncService {
     constructor(pool) {
         this.pool = pool;
@@ -16,10 +11,7 @@ class VoiceSyncService {
         };
     }
 
-    /**
-     * Sync voices from all providers
-     * @returns {Promise<{success: boolean, synced: number, errors: string[]}>}
-     */
+
     async syncAllProviders() {
         console.log('[VoiceSync] Starting sync for all providers...');
 
@@ -62,10 +54,6 @@ class VoiceSyncService {
         return results;
     }
 
-    /**
-     * Sync voices from ElevenLabs
-     * @returns {Promise<{success: boolean, count: number, error?: string}>}
-     */
     async syncElevenLabsVoices() {
         console.log('[VoiceSync] Fetching ElevenLabs voices...');
 
@@ -123,10 +111,6 @@ class VoiceSyncService {
         }
     }
 
-    /**
-     * Sync voices from Sarvam
-     * @returns {Promise<{success: boolean, count: number, error?: string}>}
-     */
     async syncSarvamVoices() {
         console.log('[VoiceSync] Fetching Sarvam voices...');
 
@@ -184,11 +168,7 @@ class VoiceSyncService {
         }
     }
 
-    /**
-     * Normalize ElevenLabs voice to common DTO format
-     * @param {any} rawVoice - Raw voice data from ElevenLabs API
-     * @returns {VoiceDTO}
-     */
+  
     normalizeElevenLabsVoice(rawVoice) {
         return {
             provider: 'elevenlabs',
@@ -209,11 +189,7 @@ class VoiceSyncService {
         };
     }
 
-    /**
-     * Normalize Sarvam voice to common DTO format
-     * @param {any} rawVoice - Raw voice data from Sarvam
-     * @returns {VoiceDTO}
-     */
+
     normalizeSarvamVoice(rawVoice) {
         return {
             provider: 'sarvam',
@@ -231,11 +207,7 @@ class VoiceSyncService {
         };
     }
 
-    /**
-     * Upsert voice into database
-     * @param {VoiceDTO} voiceDTO - Normalized voice data
-     * @returns {Promise<void>}
-     */
+
     async upsertVoice(voiceDTO) {
         try {
             const id = uuidv4();
@@ -277,11 +249,7 @@ class VoiceSyncService {
         }
     }
 
-    /**
-     * Get all voices from database
-     * @param {string} provider - Filter by provider (all, elevenlabs, sarvam)
-     * @returns {Promise<any[]>}
-     */
+
     async getVoices(provider = 'all') {
         try {
             // Check cache first
@@ -315,12 +283,7 @@ class VoiceSyncService {
         }
     }
 
-    /**
-     * Filter voices by provider
-     * @param {any[]} voices - All voices
-     * @param {string} provider - Provider filter
-     * @returns {any[]}
-     */
+
     filterVoicesByProvider(voices, provider) {
         if (provider === 'all') {
             return voices;
@@ -328,17 +291,21 @@ class VoiceSyncService {
         return voices.filter(v => v.provider === provider);
     }
 
-    /**
-     * Get voice by ID
-     * @param {string} id - Voice ID
-     * @returns {Promise<any|null>}
-     */
     async getVoiceById(id) {
         try {
-            const [rows] = await this.pool.execute(
+            // First try to find by UUID (id field)
+            let [rows] = await this.pool.execute(
                 'SELECT * FROM voices WHERE id = ?',
                 [id]
             );
+
+            // If not found, try to find by provider_voice_id (for backward compatibility)
+            if (rows.length === 0) {
+                [rows] = await this.pool.execute(
+                    'SELECT * FROM voices WHERE provider_voice_id = ?',
+                    [id]
+                );
+            }
 
             if (rows.length === 0) {
                 return null;
