@@ -56,6 +56,7 @@ async function generateSarvamTTS(text, options) {
         language: options.language,
         speaker: options.speaker,
         format: options.format,
+        skipConversion: options.skipConversion,
     });
 }
 
