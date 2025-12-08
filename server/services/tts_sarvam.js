@@ -1,19 +1,5 @@
 const nodeFetch = require("node-fetch");
 
-/**
- * Sarvam TTS Service
- * Provides text-to-speech functionality using Sarvam.ai API
- */
-
-/**
- * Generate speech audio using Sarvam TTS API
- * @param {string} text - The text to convert to speech
- * @param {Object} options - TTS options
- * @param {string} options.language - Target language code (default: en-IN)
- * @param {string} options.speaker - Speaker/voice name (default: anushka)
- * @param {string} options.format - Audio format: mp3, wav, pcm (default: mp3)
- * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format for Twilio compatibility
- */
 async function sarvamTTS(text, options = {}) {
     try {
         const apiKey = process.env.SARVAM_API_KEY;
@@ -35,21 +21,23 @@ async function sarvamTTS(text, options = {}) {
         console.log(`   Format: ${format}`);
 
         const response = await nodeFetch(
-            "https://api.sarvam.ai/text-to-speech/convert",
+            "https://api.sarvam.ai/text-to-speech",
             {
                 method: "POST",
                 headers: {
-                    "Authorization": `Bearer ${apiKey}`,
+                    "api-subscription-key": apiKey,
                     "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                    text: text,
+                    inputs: [text],
                     target_language_code: language,
                     speaker: speaker,
-                    format: format,
+                    model: "bulbul:v1",
+                    enable_preprocessing: true
                 }),
             }
         );
+
 
         if (!response.ok) {
             const errorText = await response.text();
@@ -58,7 +46,18 @@ async function sarvamTTS(text, options = {}) {
             throw new Error(`Sarvam API error: ${response.status} - ${response.statusText}`);
         }
 
-        const audioBuffer = await response.buffer();
+        // Sarvam returns JSON with base64 audio
+        const jsonResponse = await response.json();
+        console.log(`[TTS] Response received from Sarvam`);
+
+        // Extract base64 audio from response
+        const base64Audio = jsonResponse.audios && jsonResponse.audios[0];
+        if (!base64Audio) {
+            throw new Error('No audio data in Sarvam response');
+        }
+
+        // Convert base64 to buffer
+        const audioBuffer = Buffer.from(base64Audio, 'base64');
         console.log(`[TTS] Audio received: ${audioBuffer.length} bytes`);
 
         // Convert to ulaw_8000 format for Twilio compatibility
@@ -91,25 +90,9 @@ async function sarvamTTS(text, options = {}) {
     }
 }
 
-/**
- * Convert audio buffer to ulaw_8000 format for Twilio compatibility
- * @param {Buffer} audioBuffer - Input audio buffer
- * @param {string} sourceFormat - Source audio format (mp3, wav, pcm)
- * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format
- */
 async function convertToUlaw(audioBuffer, sourceFormat) {
     try {
-        // For now, if Sarvam supports direct ulaw output, we can request that
-        // Otherwise, we'd need to use a library like ffmpeg or sox for conversion
-        // This is a placeholder that assumes the audio is already compatible
-        // In production, you might want to:
-        // 1. Request ulaw format directly from Sarvam if supported
-        // 2. Use ffmpeg/sox for conversion if needed
-        // 3. Use a Node.js audio processing library
-
-        // TODO: Implement actual audio format conversion if needed
-        // For now, returning the buffer as-is
-        // This works if Sarvam can output in a Twilio-compatible format
+   
 
         return audioBuffer;
     } catch (error) {
