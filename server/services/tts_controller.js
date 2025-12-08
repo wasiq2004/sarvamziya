@@ -20,7 +20,7 @@ const { sarvamTTS } = require("./tts_sarvam.js");
  * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format
  */
 async function generateTTS(text, options = {}) {
-    const provider = process.env.TTS_PROVIDER || "elevenlabs";
+    const provider = options.provider || process.env.TTS_PROVIDER || "elevenlabs";
 
     console.log(`[TTS Controller] Selected provider: ${provider}`);
 
