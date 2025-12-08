@@ -43,6 +43,7 @@ const expressWsInstance = expressWs(app, server, {
   }
 });
 console.log('✅ WebSocket with skipUTF8Validation enabled');
+
 // ADD THIS BLOCK HERE:
 console.log('=== ENVIRONMENT CHECK ===');
 console.log('APP_URL:', process.env.APP_URL || 'NOT SET');
@@ -78,6 +79,7 @@ app.ws('/voice-stream-google', (ws, req) => {
   googleVoiceHandler.handleConnection(ws, req);
 });
 console.log('✅ Google Voice Stream Handler initialized at /voice-stream-google');
+
 // === ADD THIS BLOCK ===
 if (!process.env.ELEVEN_LABS_API_KEY) {
   console.warn("WARNING: ELEVEN_LABS_API_KEY is not configured. Text-to-speech will not work.");
@@ -117,6 +119,7 @@ voiceSyncService.syncAllProviders()
     }
   })
   .catch(err => console.error('❌ Initial voice sync failed:', err.message));
+
 // Get user wallet balance
 app.get('/api/wallet/balance/:userId', async (req, res) => {
   try {
