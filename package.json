@@ -48,6 +48,7 @@
     "react-router-dom": "^7.9.5",
     "twilio": "^5.10.4",
     "uuid": "^9.0.1",
+    "wavefile": "^11.0.0",
     "ws": "^8.18.3",
     "zustand": "^5.0.8"
   },
