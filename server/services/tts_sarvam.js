@@ -1,20 +1,6 @@
 const nodeFetch = require("node-fetch");
 const { WaveFile } = require('wavefile');
 
-/**
- * Sarvam TTS Service
- * Provides text-to-speech functionality using Sarvam.ai API
- */
-
-/**
- * Generate speech audio using Sarvam TTS API
- * @param {string} text - The text to convert to speech
- * @param {Object} options - TTS options
- * @param {string} options.language - Target language code (default: en-IN)
- * @param {string} options.speaker - Speaker/voice name (default: anushka)
- * @param {string} options.format - Audio format: mp3, wav, pcm (default: mp3)
- * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format for Twilio compatibility
- */
 async function sarvamTTS(text, options = {}) {
     try {
         const apiKey = process.env.SARVAM_API_KEY;
@@ -109,11 +95,6 @@ async function sarvamTTS(text, options = {}) {
     }
 }
 
-/**
- * Detect audio format by inspecting magic numbers (file signatures)
- * @param {Buffer} buffer - Audio buffer to inspect
- * @returns {string} - Detected format: 'mp3', 'wav', 's16le', or 'unknown'
- */
 function detectAudioFormat(buffer) {
     if (buffer.length < 4) return 'unknown';
 
@@ -134,18 +115,13 @@ function detectAudioFormat(buffer) {
     return 's16le';
 }
 
-/**
- * Convert audio buffer to ulaw_8000 format for Twilio compatibility
- * @param {Buffer} audioBuffer - Input audio buffer
- * @param {string} sourceFormat - Source audio format (mp3, wav, pcm)
- * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format
- */
 async function convertToUlaw(audioBuffer, sourceFormat) {
     try {
         console.log(`[TTS] Converting ${sourceFormat} (${audioBuffer.length} bytes) to ulaw_8000...`);
 
         // OPTION 1: Use wavefile for WAV and Raw PCM (Pure JS, no ffmpeg needed)
-        if (sourceFormat === 'wav' || sourceFormat === 's16le' || sourceFormat === 'unknown') {
+        // explicitly excluding mp3 to force ffmpeg path for mp3 as requested
+        if (sourceFormat !== 'mp3' && (sourceFormat === 'wav' || sourceFormat === 's16le' || sourceFormat === 'unknown')) {
             try {
                 const wav = new WaveFile();
 
@@ -267,11 +243,6 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
     }
 }
 
-/**
- * Encode a single 16-bit PCM sample to u-law
- * @param {number} sample - Signed 16-bit integer
- * @returns {number} - 8-bit u-law encoded byte
- */
 function encodeMuLaw(sample) {
     const BIAS = 0x84;
     const CLIP = 32635;
