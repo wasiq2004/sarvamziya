@@ -73,12 +73,21 @@ console.log('✅ Voice Sync Service initialized');
 console.log('✅ WebSocket support enabled on HTTP server');
 
 // Initialize Google Voice Stream Handler
+// Initialize Google Voice Stream Handler
 const GoogleVoiceStreamHandler = require('./services/GoogleVoiceStreamHandler.js');
 const googleVoiceHandler = new GoogleVoiceStreamHandler(voiceSyncService, walletService);
 app.ws('/voice-stream-google', (ws, req) => {
   googleVoiceHandler.handleConnection(ws, req);
 });
 console.log('✅ Google Voice Stream Handler initialized at /voice-stream-google');
+
+// Initialize Deepgram Browser Handler
+const { DeepgramBrowserHandler } = require('./services/DeepgramBrowserHandler.js');
+const deepgramBrowserHandler = new DeepgramBrowserHandler(process.env.DEEPGRAM_API_KEY, process.env.GOOGLE_GEMINI_API_KEY);
+app.ws('/voice-stream-deepgram', (ws, req) => {
+  deepgramBrowserHandler.handleConnection(ws, req);
+});
+console.log('✅ Deepgram Browser Handler initialized at /voice-stream-deepgram');
 
 // === ADD THIS BLOCK ===
 if (!process.env.ELEVEN_LABS_API_KEY) {
