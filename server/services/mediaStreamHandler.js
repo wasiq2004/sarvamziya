@@ -14,6 +14,7 @@ class MediaStreamHandler {
         this.campaignService = campaignService;
     }
 
+    // ✅ FIX: Method to get fresh API key each time
     getElevenLabsApiKey() {
         return process.env.ELEVEN_LABS_API_KEY || process.env.ELEVENLABS_API_KEY;
     }
@@ -173,7 +174,7 @@ class MediaStreamHandler {
                             sample_rate: 8000,
                             model: "nova-2-phonecall",
                             smart_format: true,
-                            interim_results: true,  // Only final results
+                            interim_results: true,  // MUST be true for utterance_end_ms
                             utterance_end_ms: 1000,
                             punctuate: true,
                             language: "en-US",
