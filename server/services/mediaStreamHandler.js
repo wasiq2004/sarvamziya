@@ -174,7 +174,7 @@ class MediaStreamHandler {
                             sample_rate: 8000,
                             model: "nova-2-phonecall",
                             smart_format: true,
-                            interim_results: false,  // Only final results
+                            interim_results: true,  // Only final results
                             utterance_end_ms: 1000,
                             punctuate: true,
                             language: "en-US",
