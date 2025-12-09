@@ -1,19 +1,6 @@
 const nodeFetch = require("node-fetch");
+const { WaveFile } = require('wavefile');
 
-/**
- * Sarvam TTS Service
- * Provides text-to-speech functionality using Sarvam.ai API
- */
-
-/**
- * Generate speech audio using Sarvam TTS API
- * @param {string} text - The text to convert to speech
- * @param {Object} options - TTS options
- * @param {string} options.language - Target language code (default: en-IN)
- * @param {string} options.speaker - Speaker/voice name (default: anushka)
- * @param {string} options.format - Audio format: mp3, wav, pcm (default: mp3)
- * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format for Twilio compatibility
- */
 async function sarvamTTS(text, options = {}) {
     try {
         const apiKey = process.env.SARVAM_API_KEY;
@@ -78,8 +65,6 @@ async function sarvamTTS(text, options = {}) {
         const actualFormat = detectAudioFormat(audioBuffer);
         console.log(`[TTS] Detected audio format: ${actualFormat} (requested: ${format})`);
 
-        // Convert to ulaw_8000 format for Twilio compatibility
-        // If skipConversion is true, return the original buffer (e.g. for web frontend)
         if (options.skipConversion) {
             console.log(`[TTS] Skipping conversion, returning ${format}`);
             return audioBuffer;
@@ -108,11 +93,6 @@ async function sarvamTTS(text, options = {}) {
     }
 }
 
-/**
- * Detect audio format by inspecting magic numbers (file signatures)
- * @param {Buffer} buffer - Audio buffer to inspect
- * @returns {string} - Detected format: 'mp3', 'wav', 's16le', or 'unknown'
- */
 function detectAudioFormat(buffer) {
     if (buffer.length < 4) return 'unknown';
 
@@ -129,21 +109,41 @@ function detectAudioFormat(buffer) {
         return 'wav'; // RIFF
     }
 
-    // If no recognizable header, assume raw PCM (signed 16-bit little-endian)
     return 's16le';
 }
 
-/**
- * Convert audio buffer to ulaw_8000 format for Twilio compatibility
- * @param {Buffer} audioBuffer - Input audio buffer
- * @param {string} sourceFormat - Source audio format (mp3, wav, pcm)
- * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format
- */
 async function convertToUlaw(audioBuffer, sourceFormat) {
     try {
-        const { spawn } = require('child_process');
-
         console.log(`[TTS] Converting ${sourceFormat} (${audioBuffer.length} bytes) to ulaw_8000...`);
+         if (sourceFormat === 'wav' || sourceFormat === 's16le' || sourceFormat === 'unknown') {
+            try {
+                const wav = new WaveFile();
+
+                if (sourceFormat === 'wav') {
+                    // Load existing WAV
+                    wav.fromBuffer(audioBuffer);
+                } else {
+                    wav.fromScratch(1, 24000, '16', audioBuffer);
+                }
+
+                // Resample to 8000Hz
+                wav.toSampleRate(8000);
+
+                // Convert to mu-law (8-bit)
+                wav.toBitDepth('8m');
+
+                // Extract raw samples (payload only, no WAV header) for Twilio
+                const samples = wav.data.samples;
+                const ulawBuffer = Buffer.from(samples);
+
+                console.log(`[TTS] Conversion successful (using wavefile): ${ulawBuffer.length} bytes`);
+                return ulawBuffer;
+
+            } catch (waveError) {
+                console.error(`[TTS] wavefile conversion failed, falling back to ffmpeg:`, waveError);
+            }
+        }
+        const { spawn } = require('child_process');
 
         return new Promise((resolve, reject) => {
             let ffmpegArgs;
@@ -166,7 +166,7 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
             } else {
                 // MP3 or WAV format
                 ffmpegArgs = [
-                    '-f', sourceFormat,     // Input format
+                    '-f', sourceFormat === 'wav' ? 'wav' : 'mp3',     // Input format
                     '-i', 'pipe:0',        // Input from stdin
                     '-ar', '8000',         // Sample rate: 8kHz
                     '-ac', '1',            // Channels: mono
@@ -195,7 +195,7 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
             ffmpeg.on('close', (code) => {
                 if (code === 0) {
                     const ulawBuffer = Buffer.concat(chunks);
-                    console.log(`[TTS] Conversion successful: ${ulawBuffer.length} bytes`);
+                    console.log(`[TTS] Conversion successful (using ffmpeg): ${ulawBuffer.length} bytes`);
                     resolve(ulawBuffer);
                 } else {
                     console.error(`[TTS] ffmpeg failed with code ${code}`);
