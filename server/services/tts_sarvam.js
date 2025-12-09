@@ -1,5 +1,4 @@
 const nodeFetch = require("node-fetch");
-
 async function sarvamTTS(text, options = {}) {
     try {
         const apiKey = process.env.SARVAM_API_KEY;
@@ -92,35 +91,33 @@ async function sarvamTTS(text, options = {}) {
 
 async function convertToUlaw(audioBuffer, sourceFormat) {
     try {
-        return audioBuffer;
         const { spawn } = require('child_process');
 
-        console.log(`[TTS] Converting ${sourceFormat} to ulaw_8000...`);
+        console.log(`[TTS] Converting ${sourceFormat} (${audioBuffer.length} bytes) to ulaw_8000...`);
 
         return new Promise((resolve, reject) => {
             // Use ffmpeg to convert to µ-law 8kHz
             const ffmpeg = spawn('ffmpeg', [
+                '-f', sourceFormat,        // Input format BEFORE input
                 '-i', 'pipe:0',           // Input from stdin
-                '-f', sourceFormat,        // Input format
                 '-ar', '8000',            // Sample rate: 8kHz
                 '-ac', '1',               // Channels: mono
                 '-acodec', 'pcm_mulaw',   // Codec: µ-law
                 '-f', 'mulaw',            // Output format
+                '-loglevel', 'error',     // Only show errors
                 'pipe:1'                  // Output to stdout
             ]);
 
             const chunks = [];
+            let stderrOutput = '';
 
             ffmpeg.stdout.on('data', (chunk) => {
                 chunks.push(chunk);
             });
 
             ffmpeg.stderr.on('data', (data) => {
-              
-                const message = data.toString();
-                if (message.includes('Error') || message.includes('error')) {
-                    console.error(`[TTS] ffmpeg stderr: ${message}`);
-                }
+                // Collect all stderr for debugging
+                stderrOutput += data.toString();
             });
 
             ffmpeg.on('close', (code) => {
@@ -129,12 +126,14 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
                     console.log(`[TTS] Conversion successful: ${ulawBuffer.length} bytes`);
                     resolve(ulawBuffer);
                 } else {
-                    reject(new Error(`ffmpeg exited with code ${code}`));
+                    console.error(`[TTS] ffmpeg failed with code ${code}`);
+                    console.error(`[TTS] ffmpeg stderr:`, stderrOutput);
+                    reject(new Error(`ffmpeg exited with code ${code}: ${stderrOutput}`));
                 }
             });
 
             ffmpeg.on('error', (error) => {
-                console.error(`[TTS] ffmpeg error:`, error);
+                console.error(`[TTS] ffmpeg process error:`, error);
                 reject(new Error(`ffmpeg process error: ${error.message}`));
             });
 
@@ -147,6 +146,8 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
         throw new Error(`Audio format conversion failed: ${error.message}`);
     }
 }
+
 module.exports = {
     sarvamTTS,
 };
+
