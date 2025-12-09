@@ -39,6 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LLMService = void 0;
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 
+// Unified LLM service that supports Gemini models using GoogleGenerativeAI SDK
 var LLMService = /** @class */ (function () {
     function LLMService(geminiApiKey) {
         this.genAI = null;
@@ -71,10 +72,7 @@ var LLMService = /** @class */ (function () {
                             model: modelName,
                             systemInstruction: (_a = request.config) === null || _a === void 0 ? void 0 : _a.systemInstruction
                         });
-
-                        prompt = request.contents;
-
-                        return [4 /*yield*/, model.generateContent(prompt)];
+                        return [4 /*yield*/, model.generateContent({ contents: request.contents })];
                     case 2:
                         result = _b.sent();
                         responseText = '';
