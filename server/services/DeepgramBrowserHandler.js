@@ -1,20 +1,15 @@
 const { createClient, LiveTranscriptionEvents } = require("@deepgram/sdk");
 const { LLMService } = require("../llmService.js");
-const { DocumentService } = require("../documentService");
 
 const sessions = new Map();
 
 class DeepgramBrowserHandler {
-    constructor(deepgramApiKey, geminiApiKey, mysqlPool) {
+    constructor(deepgramApiKey, geminiApiKey) {
         if (!deepgramApiKey) throw new Error("Missing Deepgram API Key");
         if (!geminiApiKey) throw new Error("Missing Gemini API Key");
 
         this.deepgramClient = createClient(deepgramApiKey);
         this.llmService = new LLMService(geminiApiKey);
-        this.mysqlPool = mysqlPool;
-        if (mysqlPool) {
-            this.documentService = new DocumentService(mysqlPool);
-        }
     }
 
     createSession(connectionId, agentPrompt, agentVoiceId, ws) {
@@ -84,28 +79,6 @@ class DeepgramBrowserHandler {
                         if (agent.voiceId) agentVoiceId = agent.voiceId;
                         if (agent.settings?.greetingLine) greetingMessage = agent.settings.greetingLine;
                         console.log(`✅ Loaded agent details for ${agent.name}`);
-
-                        // Load Knowledge Documents
-                        if (this.documentService && agent.settings?.knowledgeDocIds && Array.isArray(agent.settings.knowledgeDocIds) && agent.settings.knowledgeDocIds.length > 0) {
-                            try {
-                                console.log(`📚 Loading ${agent.settings.knowledgeDocIds.length} knowledge documents...`);
-                                let knowledgeContext = "";
-
-                                for (const docId of agent.settings.knowledgeDocIds) {
-                                    const content = await this.documentService.getDocumentContent(docId);
-                                    if (content) {
-                                        knowledgeContext += `\n---\nReference Document content:\n${content}\n---\n`;
-                                    }
-                                }
-
-                                if (knowledgeContext) {
-                                    agentPrompt += `\n\n# KNOWLEDGE BASE\nUse the following reference documents to answer the user's questions. If the answer is in the documents, use it. If not, rely on your general knowledge but prioritize provided information.\n${knowledgeContext}`;
-                                    console.log("✅ Knowledge context injected into system prompt");
-                                }
-                            } catch (docErr) {
-                                console.error("⚠️ Error loading knowledge documents:", docErr);
-                            }
-                        }
                     }
                 } catch (err) {
                     console.error("⚠️ Error loading agent details:", err);
