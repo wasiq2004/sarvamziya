@@ -14,7 +14,6 @@ class MediaStreamHandler {
         this.campaignService = campaignService;
     }
 
-    // ✅ FIX: Method to get fresh API key each time
     getElevenLabsApiKey() {
         return process.env.ELEVEN_LABS_API_KEY || process.env.ELEVENLABS_API_KEY;
     }
