@@ -240,7 +240,7 @@ class DeepgramBrowserHandler {
         try {
             console.log("🧠 Calling Gemini LLM...");
             const response = await this.llmService.generateContent({
-                model: "models/gemini-1.5-flash-latest",  
+                model: "gemini-2.0-flash-lite",  
                 contents: session.context,
                 config: { systemInstruction: session.agentPrompt },
             });
