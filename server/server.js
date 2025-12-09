@@ -102,7 +102,7 @@ if (!process.env.ELEVEN_LABS_API_KEY) {
 }
 console.log("Twilio Basic Service initialized");
 // ================= CORS ==================
-const FRONTEND_URL = "https://benevolent-custard-76836b.netlify.app";
+const FRONTEND_URL = "https://ziyavoice.aspirentech.com";
 
 const corsOptions = {
   origin: [
