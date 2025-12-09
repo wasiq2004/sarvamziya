@@ -37,13 +37,13 @@ var __generator = (this && this.__generator) || function (thisArg, body) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.LLMService = void 0;
-var genai_1 = require("@google/genai");
-// Unified LLM service that supports Gemini models
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+
 var LLMService = /** @class */ (function () {
     function LLMService(geminiApiKey) {
-        this.geminiClient = null;
+        this.genAI = null;
         if (geminiApiKey) {
-            this.geminiClient = new genai_1.GoogleGenAI({ apiKey: geminiApiKey });
+            this.genAI = new GoogleGenerativeAI(geminiApiKey);
         }
     }
     LLMService.prototype.isGeminiModel = function (modelId) {
@@ -51,37 +51,38 @@ var LLMService = /** @class */ (function () {
     };
     LLMService.prototype.generateContent = function (request) {
         return __awaiter(this, void 0, void 0, function () {
-            var geminiClient, geminiRequest, result, responseText, candidate, error_1;
+            var modelName, model, prompt, result, responseText, error_1;
             var _a;
             return __generator(this, function (_b) {
                 switch (_b.label) {
                     case 0:
-                        // Handle the case where geminiClient might be null
-                        if (!this.geminiClient) {
+                        // Handle the case where genAI might be null
+                        if (!this.genAI) {
                             throw new Error('Gemini client not initialized. Please provide a Gemini API key.');
                         }
                         _b.label = 1;
                     case 1:
                         _b.trys.push([1, 3, , 4]);
-                        geminiClient = this.geminiClient;
-                        geminiRequest = {
-                            contents: request.contents,
-                        };
-                        if ((_a = request.config) === null || _a === void 0 ? void 0 : _a.systemInstruction) {
-                            geminiRequest.systemInstruction = request.config.systemInstruction;
-                        }
-                        // Get the model instance first
-                        const model = geminiClient.models.get(request.model || 'gemini-1.5-flash');
-                        return [4 /*yield*/, model.generateContent(geminiRequest)];
+
+                        modelName = request.model || 'gemini-1.5-flash';
+
+                        // Use getGenerativeModel
+                        model = this.genAI.getGenerativeModel({
+                            model: modelName,
+                            systemInstruction: (_a = request.config) === null || _a === void 0 ? void 0 : _a.systemInstruction
+                        });
+
+                        prompt = request.contents;
+
+                        return [4 /*yield*/, model.generateContent(prompt)];
                     case 2:
                         result = _b.sent();
                         responseText = '';
-                        if (result && result.candidates && Array.isArray(result.candidates) && result.candidates.length > 0) {
-                            candidate = result.candidates[0];
-                            if (candidate.content && candidate.content.parts && Array.isArray(candidate.content.parts) && candidate.content.parts.length > 0) {
-                                responseText = candidate.content.parts[0].text || responseText;
-                            }
+
+                        if (result && result.response) {
+                            responseText = result.response.text();
                         }
+
                         return [2 /*return*/, { text: responseText }];
                     case 3:
                         error_1 = _b.sent();
@@ -92,26 +93,12 @@ var LLMService = /** @class */ (function () {
             });
         });
     };
+
+    // Stub for stream - could be implemented if needed
     LLMService.prototype.generateContentStream = function (request) {
-        return __awaiter(this, void 0, void 0, function () {
-            var geminiClient;
-            return __generator(this, function (_a) {
-                if (this.isGeminiModel(request.model) && this.geminiClient) {
-                    geminiClient = this.geminiClient;
-                    // Use existing Gemini implementation
-                    return [2 /*return*/, geminiClient.models.generateContentStream({
-                        model: request.model,
-                        contents: request.contents,
-                        config: request.config,
-                    })];
-                }
-                else {
-                    throw new Error("Unsupported model: ".concat(request.model));
-                }
-                return [2 /*return*/];
-            });
-        });
+        throw new Error("Stream not implemented in this version");
     };
+
     return LLMService;
 }());
 exports.LLMService = LLMService;
