@@ -66,7 +66,8 @@ class DeepgramBrowserHandler {
 
             // Load agent details if agentId is present
             let agentPrompt = identity || "You are a helpful AI assistant.";
-            let agentVoiceId = voiceId || "21m00Tcm4TlvDq8ikWAM"; // Default Rachel
+            let agentVoiceId = voiceId || "21m00Tcm4TlvDq8ikWAM"; // default
+            let greetingMessage = "Hello! How can I help you today?";
 
             if (agentId && userId) {
                 try {
@@ -76,6 +77,7 @@ class DeepgramBrowserHandler {
                     if (agent) {
                         agentPrompt = agent.identity || agentPrompt;
                         if (agent.voiceId) agentVoiceId = agent.voiceId;
+                        if (agent.settings?.greetingLine) greetingMessage = agent.settings.greetingLine;
                         console.log(`✅ Loaded agent details for ${agent.name}`);
                     }
                 } catch (err) {
@@ -84,6 +86,29 @@ class DeepgramBrowserHandler {
             }
 
             session = this.createSession(connectionId, agentPrompt, agentVoiceId, ws);
+
+            // Send initial greeting
+            setTimeout(async () => {
+                try {
+                    if (ws.readyState === ws.OPEN) {
+                        console.log(`👋 Sending greeting: "${greetingMessage}"`);
+
+                        // Send text update
+                        ws.send(JSON.stringify({
+                            event: 'agent-response',
+                            text: greetingMessage
+                        }));
+
+                        // Send audio
+                        const audio = await this.synthesizeTTS(greetingMessage, session.agentVoiceId);
+                        if (audio) {
+                            this.sendAudioToClient(session, audio);
+                        }
+                    }
+                } catch (e) {
+                    console.error("❌ Error sending greeting:", e);
+                }
+            }, 500);
 
             // Initialize Deepgram for Browser Audio (Linear16 16kHz)
             console.log("🔄 Initializing Deepgram for browser stream...");
