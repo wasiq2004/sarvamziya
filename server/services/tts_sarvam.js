@@ -92,15 +92,61 @@ async function sarvamTTS(text, options = {}) {
 
 async function convertToUlaw(audioBuffer, sourceFormat) {
     try {
-   
-
         return audioBuffer;
+        const { spawn } = require('child_process');
+
+        console.log(`[TTS] Converting ${sourceFormat} to ulaw_8000...`);
+
+        return new Promise((resolve, reject) => {
+            // Use ffmpeg to convert to µ-law 8kHz
+            const ffmpeg = spawn('ffmpeg', [
+                '-i', 'pipe:0',           // Input from stdin
+                '-f', sourceFormat,        // Input format
+                '-ar', '8000',            // Sample rate: 8kHz
+                '-ac', '1',               // Channels: mono
+                '-acodec', 'pcm_mulaw',   // Codec: µ-law
+                '-f', 'mulaw',            // Output format
+                'pipe:1'                  // Output to stdout
+            ]);
+
+            const chunks = [];
+
+            ffmpeg.stdout.on('data', (chunk) => {
+                chunks.push(chunk);
+            });
+
+            ffmpeg.stderr.on('data', (data) => {
+              
+                const message = data.toString();
+                if (message.includes('Error') || message.includes('error')) {
+                    console.error(`[TTS] ffmpeg stderr: ${message}`);
+                }
+            });
+
+            ffmpeg.on('close', (code) => {
+                if (code === 0) {
+                    const ulawBuffer = Buffer.concat(chunks);
+                    console.log(`[TTS] Conversion successful: ${ulawBuffer.length} bytes`);
+                    resolve(ulawBuffer);
+                } else {
+                    reject(new Error(`ffmpeg exited with code ${code}`));
+                }
+            });
+
+            ffmpeg.on('error', (error) => {
+                console.error(`[TTS] ffmpeg error:`, error);
+                reject(new Error(`ffmpeg process error: ${error.message}`));
+            });
+
+            // Write input buffer to ffmpeg stdin
+            ffmpeg.stdin.write(audioBuffer);
+            ffmpeg.stdin.end();
+        });
     } catch (error) {
         console.error("[TTS] Error converting audio format:", error.message);
         throw new Error(`Audio format conversion failed: ${error.message}`);
     }
 }
-
 module.exports = {
     sarvamTTS,
 };
