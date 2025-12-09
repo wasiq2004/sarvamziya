@@ -310,7 +310,7 @@ class MediaStreamHandler {
     async callLLM(session) {
         try {
             const response = await this.llmService.generateContent({
-                model: "gemini-1.5-flash",
+                model: "models/gemini-2.5-flash",
                 contents: session.context,
                 config: { systemInstruction: session.agentPrompt },
             });
