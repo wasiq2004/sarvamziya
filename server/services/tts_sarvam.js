@@ -163,24 +163,22 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
 
                 // Extract samples. wav.data.samples determines the samples as bytes (Uint8Array)
                 // We need to interpret them as 16-bit PCM (Little Endian)
-                const samples = wav.data.samples;
+                // Safely get samples as Int16 array
+                // This handles endianness and channel separation for us
+                let samples = wav.getSamples(false, Int16Array);
 
-                // Convert to 8-bit mu-law manually to ensure valid G.711 format (silence = 0xFF)
-                // wavefile's built-in conversion was producing 0x00 for silence which is invalid
-                const ulawBuffer = Buffer.alloc(samples.length / 2);
+                // If stereo (array of arrays), mix down or take first channel
+                if (Array.isArray(samples) && samples.length > 0 && samples[0].length !== undefined && typeof samples[0] !== 'number') {
+                    // Stereo or multi-channel: samples is [channel1, channel2]
+                    console.log(`[TTS] Multiple channels detected, using first channel`);
+                    samples = samples[0];
+                }
 
-                for (let i = 0; i < ulawBuffer.length; i++) {
-                    // Read 16-bit sample (Little Endian)
-                    const low = samples[2 * i];
-                    const high = samples[2 * i + 1];
-                    let sample = (high << 8) | low;
+                const length = samples.length;
+                const ulawBuffer = Buffer.alloc(length);
 
-                    // Convert to signed 16-bit integer
-                    if (sample & 0x8000) {
-                        sample = sample - 0x10000;
-                    }
-
-                    // Encode to mu-law
+                for (let i = 0; i < length; i++) {
+                    let sample = samples[i];
                     ulawBuffer[i] = encodeMuLaw(sample);
                 }
 
