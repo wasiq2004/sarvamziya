@@ -1,4 +1,19 @@
 const nodeFetch = require("node-fetch");
+
+/**
+ * Sarvam TTS Service
+ * Provides text-to-speech functionality using Sarvam.ai API
+ */
+
+/**
+ * Generate speech audio using Sarvam TTS API
+ * @param {string} text - The text to convert to speech
+ * @param {Object} options - TTS options
+ * @param {string} options.language - Target language code (default: en-IN)
+ * @param {string} options.speaker - Speaker/voice name (default: anushka)
+ * @param {string} options.format - Audio format: mp3, wav, pcm (default: mp3)
+ * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format for Twilio compatibility
+ */
 async function sarvamTTS(text, options = {}) {
     try {
         const apiKey = process.env.SARVAM_API_KEY;
@@ -59,6 +74,10 @@ async function sarvamTTS(text, options = {}) {
         const audioBuffer = Buffer.from(base64Audio, 'base64');
         console.log(`[TTS] Audio received: ${audioBuffer.length} bytes`);
 
+        // Check actual audio format by inspecting magic numbers
+        const actualFormat = detectAudioFormat(audioBuffer);
+        console.log(`[TTS] Detected audio format: ${actualFormat} (requested: ${format})`);
+
         // Convert to ulaw_8000 format for Twilio compatibility
         // If skipConversion is true, return the original buffer (e.g. for web frontend)
         if (options.skipConversion) {
@@ -66,7 +85,7 @@ async function sarvamTTS(text, options = {}) {
             return audioBuffer;
         }
 
-        const ulawBuffer = await convertToUlaw(audioBuffer, format);
+        const ulawBuffer = await convertToUlaw(audioBuffer, actualFormat);
 
         console.log(`[TTS] Converted to ulaw_8000: ${ulawBuffer.length} bytes`);
         return ulawBuffer;
@@ -89,6 +108,37 @@ async function sarvamTTS(text, options = {}) {
     }
 }
 
+/**
+ * Detect audio format by inspecting magic numbers (file signatures)
+ * @param {Buffer} buffer - Audio buffer to inspect
+ * @returns {string} - Detected format: 'mp3', 'wav', 's16le', or 'unknown'
+ */
+function detectAudioFormat(buffer) {
+    if (buffer.length < 4) return 'unknown';
+
+    // Check for MP3 (ID3 tag or MPEG frame sync)
+    if (buffer[0] === 0x49 && buffer[1] === 0x44 && buffer[2] === 0x33) {
+        return 'mp3'; // ID3v2 tag
+    }
+    if (buffer[0] === 0xFF && (buffer[1] & 0xE0) === 0xE0) {
+        return 'mp3'; // MPEG frame sync
+    }
+
+    // Check for WAV (RIFF header)
+    if (buffer[0] === 0x52 && buffer[1] === 0x49 && buffer[2] === 0x46 && buffer[3] === 0x46) {
+        return 'wav'; // RIFF
+    }
+
+    // If no recognizable header, assume raw PCM (signed 16-bit little-endian)
+    return 's16le';
+}
+
+/**
+ * Convert audio buffer to ulaw_8000 format for Twilio compatibility
+ * @param {Buffer} audioBuffer - Input audio buffer
+ * @param {string} sourceFormat - Source audio format (mp3, wav, pcm)
+ * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format
+ */
 async function convertToUlaw(audioBuffer, sourceFormat) {
     try {
         const { spawn } = require('child_process');
@@ -96,17 +146,38 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
         console.log(`[TTS] Converting ${sourceFormat} (${audioBuffer.length} bytes) to ulaw_8000...`);
 
         return new Promise((resolve, reject) => {
-            // Use ffmpeg to convert to µ-law 8kHz
-            const ffmpeg = spawn('ffmpeg', [
-                '-f', sourceFormat,        // Input format BEFORE input
-                '-i', 'pipe:0',           // Input from stdin
-                '-ar', '8000',            // Sample rate: 8kHz
-                '-ac', '1',               // Channels: mono
-                '-acodec', 'pcm_mulaw',   // Codec: µ-law
-                '-f', 'mulaw',            // Output format
-                '-loglevel', 'error',     // Only show errors
-                'pipe:1'                  // Output to stdout
-            ]);
+            let ffmpegArgs;
+
+            // Build ffmpeg arguments based on source format
+            if (sourceFormat === 's16le' || sourceFormat === 'unknown') {
+                // Raw PCM format - need to specify input parameters
+                ffmpegArgs = [
+                    '-f', 's16le',         // Input format: signed 16-bit PCM little-endian
+                    '-ar', '24000',        // Input sample rate (Sarvam typically uses 24kHz)
+                    '-ac', '1',            // Input channels: mono
+                    '-i', 'pipe:0',        // Input from stdin
+                    '-ar', '8000',         // Output sample rate: 8kHz
+                    '-ac', '1',            // Output channels: mono
+                    '-acodec', 'pcm_mulaw', // Codec: µ-law
+                    '-f', 'mulaw',         // Output format
+                    '-loglevel', 'error',  // Only show errors
+                    'pipe:1'               // Output to stdout
+                ];
+            } else {
+                // MP3 or WAV format
+                ffmpegArgs = [
+                    '-f', sourceFormat,     // Input format
+                    '-i', 'pipe:0',        // Input from stdin
+                    '-ar', '8000',         // Sample rate: 8kHz
+                    '-ac', '1',            // Channels: mono
+                    '-acodec', 'pcm_mulaw', // Codec: µ-law
+                    '-f', 'mulaw',         // Output format
+                    '-loglevel', 'error',  // Only show errors
+                    'pipe:1'               // Output to stdout
+                ];
+            }
+
+            const ffmpeg = spawn('ffmpeg', ffmpegArgs);
 
             const chunks = [];
             let stderrOutput = '';
@@ -150,4 +221,3 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
 module.exports = {
     sarvamTTS,
 };
-
