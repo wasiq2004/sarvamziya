@@ -52,7 +52,13 @@ router.get('/:userId', async (req, res) => {
         const [countResult] = await mysqlPool.execute(countQuery, filterParams);
         const total = countResult[0].total;
 
-        // Get paginated results with agent name
+        // Create params array for SELECT query: just filters (LIMIT/OFFSET interpolated)
+        const selectParams = [...filterParams];
+
+        // Ensure limit/offset are numbers to prevent injection
+        const limitNum = parseInt(limit) || 50;
+        const offsetNum = parseInt(offset) || 0;
+
         const selectQuery = `
             SELECT 
                 c.id,
@@ -74,11 +80,8 @@ router.get('/:userId', async (req, res) => {
             LEFT JOIN agents a ON c.agent_id = a.id
             WHERE ${whereClause}
             ORDER BY c.started_at DESC
-            LIMIT ? OFFSET ?
+            LIMIT ${limitNum} OFFSET ${offsetNum}
         `;
-
-        // Create params array for SELECT query: filters + limit + offset
-        const selectParams = [...filterParams, parseInt(limit), parseInt(offset)];
 
         const [calls] = await mysqlPool.execute(selectQuery, selectParams);
 
