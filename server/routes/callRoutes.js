@@ -59,6 +59,7 @@ router.get('/:userId', async (req, res) => {
             SELECT 
                 c.id,
                 c.user_id,
+                c.agent_id,
                 c.call_sid,
                 c.from_number,
                 c.to_number,
@@ -67,8 +68,9 @@ router.get('/:userId', async (req, res) => {
                 c.started_at,
                 c.ended_at,
                 c.duration,
-                c.recording_url,
-                c.agent_id,
+                c.provider,
+                c.model,
+                c.voice_id,
                 a.name as agent_name
             FROM calls c
             LEFT JOIN agents a ON c.agent_id = a.id
@@ -90,13 +92,16 @@ router.get('/:userId', async (req, res) => {
             direction: null, // Column doesn't exist in production
             status: call.status,
             callType: call.call_type || 'web_call',
-            timestamp: call.started_at, // Use started_at as timestamp
+            timestamp: call.started_at,
             startedAt: call.started_at,
             endedAt: call.ended_at,
             duration: call.duration || 0,
-            recordingUrl: call.recording_url,
+            recordingUrl: null, // Column doesn't exist in production
             agentId: call.agent_id,
-            agentName: call.agent_name || 'Unknown Agent'
+            agentName: call.agent_name || 'Unknown Agent',
+            provider: call.provider,
+            model: call.model,
+            voiceId: call.voice_id
         }));
 
         res.json({
