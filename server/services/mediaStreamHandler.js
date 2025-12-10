@@ -401,10 +401,34 @@ class MediaStreamHandler {
 
             console.log(`📤 Sending audio to Twilio:`);
             console.log(`   Total base64 length: ${base64Audio.length}`);
+            console.log(`   Raw buffer length: ${audioBuffer.length} bytes`);
             console.log(`   First 50 chars: ${base64Audio.substring(0, 50)}`);
 
-            for (let i = 0; i < base64Audio.length; i += chunkSize) {
-                const chunk = base64Audio.slice(i, i + chunkSize);
+            // Send chunks with small delays for better playback
+            let offset = 0;
+            const sendNextChunk = () => {
+                if (offset >= base64Audio.length) {
+                    // All chunks sent, send mark
+                    session.ws.send(
+                        JSON.stringify({
+                            event: "mark",
+                            streamSid: session.streamSid,
+                            mark: { name: "audio_complete" },
+                        })
+                    );
+
+                    console.log(`✅ Sent ${chunksSent} audio chunks to Twilio (streamSid: ${session.streamSid})`);
+
+                    // Clear speaking flag after estimated duration
+                    const estimatedDurationMs = chunksSent * 20;
+                    setTimeout(() => {
+                        session.isSpeaking = false;
+                        console.log(`✅ Agent finished speaking`);
+                    }, estimatedDurationMs);
+                    return;
+                }
+
+                const chunk = base64Audio.slice(offset, offset + chunkSize);
                 session.ws.send(
                     JSON.stringify({
                         event: "media",
@@ -415,25 +439,15 @@ class MediaStreamHandler {
                     })
                 );
                 chunksSent++;
-            }
-            // Send mark to indicate audio completion
-            session.ws.send(
-                JSON.stringify({
-                    event: "mark",
-                    streamSid: session.streamSid,
-                    mark: { name: "audio_complete" },
-                })
-            );
+                offset += chunkSize;
 
-            // ✅ Clear speaking flag after a delay (estimate based on audio length)
-            // Approximate: 160 bytes µ-law @ 8kHz = 20ms per chunk
-            const estimatedDurationMs = chunksSent * 20;
-            setTimeout(() => {
-                session.isSpeaking = false;
-                console.log(`✅ Agent finished speaking`);
-            }, estimatedDurationMs);
+                // Send next chunk after 20ms (matches 160 bytes @ 8kHz = 20ms of audio)
+                setTimeout(sendNextChunk, 20);
+            };
 
-            console.log(`✅ Sent ${chunksSent} audio chunks to Twilio (streamSid: ${session.streamSid})`);
+            // Start sending chunks
+            sendNextChunk();
+
         } catch (err) {
             console.error("❌ Error sending audio to Twilio:", err);
             session.isSpeaking = false; // Clear flag on error
