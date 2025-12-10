@@ -2174,6 +2174,7 @@ app.post('/api/twilio/voice', async (req, res) => {
 
     // Connect directly to WebSocket stream (agent will send greeting)
     const connect = response.connect();
+
     const stream = connect.stream({
       url: streamUrl,
       name: `stream_${actualCallId}`
@@ -2212,6 +2213,20 @@ app.post('/api/twilio/voice', async (req, res) => {
     res.send(response.toString());
   }
 });
+
+// Stream fallback - keeps call alive if stream ends
+app.post('/api/twilio/stream-fallback', (req, res) => {
+  console.log('⚠️ Stream ended, keeping call alive...');
+  const VoiceResponse = require('twilio').twiml.VoiceResponse;
+  const response = new VoiceResponse();
+
+  // Keep the call alive with a long pause
+  response.pause({ length: 3600 }); // 1 hour pause (effectively keeps call alive)
+
+  res.type('text/xml');
+  res.send(response.toString());
+});
+
 // Twilio Status Callback
 app.post('/api/twilio/callback', async (req, res) => {
   try {
