@@ -4,15 +4,16 @@ const { LLMService } = require("../llmService.js");
 const sessions = new Map();
 
 class DeepgramBrowserHandler {
-    constructor(deepgramApiKey, geminiApiKey) {
+    constructor(deepgramApiKey, geminiApiKey, mysqlPool = null) {
         if (!deepgramApiKey) throw new Error("Missing Deepgram API Key");
         if (!geminiApiKey) throw new Error("Missing Gemini API Key");
 
         this.deepgramClient = createClient(deepgramApiKey);
         this.llmService = new LLMService(geminiApiKey);
+        this.mysqlPool = mysqlPool; // Add database pool for call logging
     }
 
-    createSession(connectionId, agentPrompt, agentVoiceId, ws) {
+    createSession(connectionId, agentPrompt, agentVoiceId, ws, userId = null, agentId = null) {
         const session = {
             id: connectionId,
             context: [],
@@ -23,9 +24,13 @@ class DeepgramBrowserHandler {
             isReady: false,
             isSpeaking: false,
             lastUserSpeechTime: null,
+            userId: userId,
+            agentId: agentId,
+            callId: null, // Will be set when call is logged
+            startTime: new Date(),
         };
         sessions.set(connectionId, session);
-        console.log(`✅ Created browser session ${connectionId}`);
+        console.log(`✅ Created browser session ${connectionId} for user ${userId}, agent ${agentId}`);
         return session;
     }
 
@@ -85,7 +90,10 @@ class DeepgramBrowserHandler {
                 }
             }
 
-            session = this.createSession(connectionId, agentPrompt, agentVoiceId, ws);
+            session = this.createSession(connectionId, agentPrompt, agentVoiceId, ws, userId, agentId);
+
+            // Log call start to database
+            await this.logCallStart(session);
 
             // Send initial greeting
             setTimeout(async () => {
@@ -220,8 +228,12 @@ class DeepgramBrowserHandler {
                 }
             });
 
-            ws.on('close', () => {
+            ws.on('close', async () => {
                 console.log("🔌 Browser WebSocket closed");
+                // Log call end before ending session
+                if (session) {
+                    await this.logCallEnd(session);
+                }
                 this.endSession(connectionId);
                 if (keepAliveInterval) clearInterval(keepAliveInterval);
             });
@@ -294,6 +306,63 @@ class DeepgramBrowserHandler {
         setTimeout(() => {
             session.isSpeaking = false;
         }, durationSeconds * 1000);
+    }
+
+    async logCallStart(session) {
+        if (!this.mysqlPool || !session.userId) {
+            console.log('⚠️ Skipping call logging (no database pool or user ID)');
+            return null;
+        }
+
+        try {
+            const { v4: uuidv4 } = require('uuid');
+            const callId = uuidv4();
+
+            await this.mysqlPool.execute(
+                `INSERT INTO calls (id, user_id, agent_id, call_sid, from_number, to_number, direction, status, call_type, started_at, timestamp)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+                [
+                    callId,
+                    session.userId,
+                    session.agentId || null,
+                    session.id, // Use session ID as call_sid for web calls
+                    'web-browser', // from_number
+                    'voice-agent', // to_number
+                    'inbound', // direction
+                    'in-progress', // status
+                    'web_call', // call_type
+                    session.startTime
+                ]
+            );
+
+            session.callId = callId;
+            console.log(`✅ Call logged to database: ${callId}`);
+            return callId;
+        } catch (err) {
+            console.error('❌ Error logging call start:', err);
+            return null;
+        }
+    }
+
+    async logCallEnd(session) {
+        if (!this.mysqlPool || !session.callId) {
+            console.log('⚠️ Skipping call end logging (no database pool or call ID)');
+            return;
+        }
+
+        try {
+            const endTime = new Date();
+            const duration = Math.floor((endTime - session.startTime) / 1000); // Duration in seconds
+
+            await this.mysqlPool.execute(
+                `UPDATE calls SET status = ?, ended_at = ?, duration = ? WHERE id = ?`,
+                ['completed', endTime, duration, session.callId]
+            );
+
+            console.log(`✅ Call ended and logged: ${session.callId}, duration: ${duration}s`);
+        } catch (err) {
+            console.error('❌ Error logging call end:', err);
+        }
     }
 }
 
