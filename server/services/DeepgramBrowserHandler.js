@@ -119,7 +119,7 @@ class DeepgramBrowserHandler {
                 encoding: "linear16",
                 sample_rate: 16000,
                 interim_results: true,
-                utterance_end_ms: 1000,
+                utterance_end_ms: 500, // Reduced from 1000ms for faster response
                 punctuate: true,
             });
 
@@ -162,7 +162,7 @@ class DeepgramBrowserHandler {
                     const llmResponse = await this.callLLM(session);
                     this.appendToContext(session, llmResponse, "model");
 
-                    // Send text response to client
+                    // Send text response to client immediately
                     if (ws.readyState === ws.OPEN) {
                         ws.send(JSON.stringify({
                             event: 'agent-response',
@@ -170,13 +170,17 @@ class DeepgramBrowserHandler {
                         }));
                     }
 
-                    // Generate TTS
+                    // Generate TTS in parallel (don't await - let it happen in background)
                     console.log(`🔊 Synthesizing response...`);
-                    const ttsAudio = await this.synthesizeTTS(llmResponse, session.agentVoiceId);
-
-                    if (ttsAudio) {
-                        this.sendAudioToClient(session, ttsAudio);
-                    }
+                    this.synthesizeTTS(llmResponse, session.agentVoiceId)
+                        .then(ttsAudio => {
+                            if (ttsAudio) {
+                                this.sendAudioToClient(session, ttsAudio);
+                            }
+                        })
+                        .catch(err => {
+                            console.error("❌ TTS generation failed:", err);
+                        });
 
                 } catch (err) {
                     console.error("❌ Error processing transcript:", err);
