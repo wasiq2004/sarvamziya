@@ -131,8 +131,18 @@ class MediaStreamHandler {
                                 const AgentService = require('./agentService.js');
                                 const agentService = new AgentService(require('../config/database.js').default);
 
+                                console.log(`🔍 Fetching agent from database: userId=${userId}, agentId=${agentId}`);
                                 const agent = await agentService.getAgentById(userId, agentId);
+                                console.log(`📋 Agent query result:`, agent ? `Found: ${agent.name}` : 'NOT FOUND');
+
                                 if (agent) {
+                                    console.log(`📊 Agent details:`, {
+                                        name: agent.name,
+                                        voiceId: agent.voiceId,
+                                        hasIdentity: !!agent.identity,
+                                        hasGreeting: !!agent.settings?.greetingLine
+                                    });
+
                                     agentPrompt = agent.identity || agentPrompt;
 
                                     // ✅ CRITICAL: Use the voice ID directly from database
@@ -145,12 +155,16 @@ class MediaStreamHandler {
 
                                     if (agent.settings?.greetingLine) {
                                         greetingMessage = agent.settings.greetingLine;
+                                        console.log(`👋 Using custom greeting: "${greetingMessage}"`);
+                                    } else {
+                                        console.log(`👋 Using default greeting: "${greetingMessage}"`);
                                     }
                                     console.log(`✅ Loaded agent: ${agent.name}`);
                                     console.log(`   Voice ID: ${agentVoiceId}`);
                                     console.log(`   Prompt: ${agentPrompt.substring(0, 100)}...`);
                                 } else {
-                                    console.warn(`⚠️  Agent ${agentId} not found, using defaults`);
+                                    console.error(`❌ Agent ${agentId} not found in database for userId ${userId}`);
+                                    console.warn(`⚠️  Using defaults: voice=${agentVoiceId}, greeting="${greetingMessage}"`);
                                 }
                             } catch (err) {
                                 console.error("⚠️  Error loading agent:", err.message);
@@ -244,18 +258,29 @@ class MediaStreamHandler {
                         // Send greeting after a short delay
                         setTimeout(async () => {
                             try {
-                                console.log(`👋 Greeting: "${session.greetingMessage}"`);
-                                console.log(`🔊 Using voice ID for greeting: ${session.agentVoiceId}`);
+                                console.log(`\n========== SENDING GREETING ==========`);
+                                console.log(`👋 Greeting text: "${session.greetingMessage}"`);
+                                console.log(`🔊 Voice ID: ${session.agentVoiceId}`);
+                                console.log(`📞 Call ID: ${session.callId}`);
+                                console.log(`🔗 Stream SID: ${session.streamSid}`);
+                                console.log(`✅ Stream ready: ${session.isReady}`);
+
                                 const audio = await this.synthesizeTTS(session.greetingMessage, session.agentVoiceId);
+
                                 if (audio && audio.length > 0) {
                                     console.log(`✅ Greeting audio generated: ${audio.length} bytes`);
+                                    console.log(`📤 Sending greeting to Twilio...`);
                                     this.sendAudioToTwilio(session, audio);
+                                    console.log(`========================================\n`);
                                 } else {
                                     console.error("❌ Greeting audio is empty or null");
+                                    console.error("   This means TTS generation failed!");
+                                    console.log(`========================================\n`);
                                 }
                             } catch (err) {
                                 console.error("❌ Greeting error:", err);
                                 console.error("❌ Error stack:", err.stack);
+                                console.log(`========================================\n`);
                             }
                         }, 500);
 
