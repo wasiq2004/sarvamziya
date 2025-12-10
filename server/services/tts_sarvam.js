@@ -159,7 +159,7 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
                     '-ar', '8000',         // Output sample rate: 8kHz
                     '-ac', '1',            // Output channels: mono
                     '-acodec', 'pcm_mulaw', // Codec: µ-law
-                    '-f', 'data',          // Output format: raw data (no container)
+                    '-f', 'mulaw',         // Output format: raw mulaw
                     '-loglevel', 'error',  // Only show errors
                     'pipe:1'               // Output to stdout
                 ];
@@ -172,7 +172,7 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
                     '-ar', '8000',         // Sample rate: 8kHz
                     '-ac', '1',            // Channels: mono
                     '-acodec', 'pcm_mulaw', // Codec: µ-law
-                    '-f', 'data',          // Output format: raw data (no container)
+                    '-f', 'mulaw',         // Output format: raw mulaw
                     '-loglevel', 'error',  // Only show errors
                     'pipe:1'               // Output to stdout
                 ];
