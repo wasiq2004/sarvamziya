@@ -194,10 +194,24 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
                 if (code === 0) {
                     const fullBuffer = Buffer.concat(chunks);
 
-                    // AU format has a 24-byte header, strip it to get raw µ-law
-                    const ulawBuffer = fullBuffer.slice(24);
+                    // AU format header parsing
+                    // AU header: magic(4) + data_offset(4) + data_size(4) + encoding(4) + sample_rate(4) + channels(4)
+                    // The data_offset field (bytes 4-7) tells us where audio data starts
 
-                    console.log(`[TTS] Conversion successful: ${ulawBuffer.length} bytes (stripped AU header)`);
+                    if (fullBuffer.length < 24) {
+                        console.error(`[TTS] Buffer too small: ${fullBuffer.length} bytes`);
+                        reject(new Error('Audio buffer too small'));
+                        return;
+                    }
+
+                    // Read the data offset (big-endian uint32 at position 4)
+                    const dataOffset = fullBuffer.readUInt32BE(4);
+                    console.log(`[TTS] AU header data offset: ${dataOffset} bytes`);
+
+                    // Strip the header based on actual offset
+                    const ulawBuffer = fullBuffer.slice(dataOffset);
+
+                    console.log(`[TTS] Conversion successful: ${ulawBuffer.length} bytes (stripped ${dataOffset}-byte AU header)`);
                     console.log(`[TTS] Full buffer size: ${fullBuffer.length} bytes`);
                     console.log(`[TTS] First 20 bytes (hex): ${ulawBuffer.slice(0, 20).toString('hex')}`);
                     console.log(`[TTS] First 20 bytes (decimal): [${Array.from(ulawBuffer.slice(0, 20)).join(', ')}]`);
