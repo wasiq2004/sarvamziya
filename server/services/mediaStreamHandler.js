@@ -310,7 +310,7 @@ class MediaStreamHandler {
     async callLLM(session) {
         try {
             const response = await this.llmService.generateContent({
-                model: "models/gemini-2.5-flash",
+                model: "gemini-1.5-flash",
                 contents: session.context,
                 config: { systemInstruction: session.agentPrompt },
             });
@@ -352,27 +352,36 @@ class MediaStreamHandler {
             // ✅ Set speaking flag
             session.isSpeaking = true;
 
-            const base64Audio = audioBuffer.toString("base64");
-            const chunkSize = 214; // 160 bytes µ-law = 214 chars base64
+            // Twilio recommends 20ms of audio per message
+            // 8000 Hz * 20 ms / 1000 = 160 samples
+            // 8-bit mulaw = 1 byte per sample -> 160 bytes
+            const CHUNK_SIZE = 160;
+
             let chunksSent = 0;
+            const totalBytes = audioBuffer.length;
 
-            console.log(`📤 Sending audio to Twilio:`);
-            console.log(`   Total base64 length: ${base64Audio.length}`);
-            console.log(`   First 50 chars: ${base64Audio.substring(0, 50)}`);
+            console.log(`📤 Sending audio to Twilio: ${totalBytes} bytes`);
 
-            for (let i = 0; i < base64Audio.length; i += chunkSize) {
-                const chunk = base64Audio.slice(i, i + chunkSize);
+            for (let i = 0; i < totalBytes; i += CHUNK_SIZE) {
+                // Slice the buffer directly
+                const end = Math.min(i + CHUNK_SIZE, totalBytes);
+                const chunkBuffer = audioBuffer.subarray(i, end);
+
+                // Convert chunk to base64
+                const payload = chunkBuffer.toString('base64');
+
                 session.ws.send(
                     JSON.stringify({
                         event: "media",
                         streamSid: session.streamSid,
                         media: {
-                            payload: chunk
+                            payload: payload
                         },
                     })
                 );
                 chunksSent++;
             }
+
             // Send mark to indicate audio completion
             session.ws.send(
                 JSON.stringify({
