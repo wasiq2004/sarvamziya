@@ -282,7 +282,7 @@ class MediaStreamHandler {
                                 console.error("❌ Error stack:", err.stack);
                                 console.log(`========================================\n`);
                             }
-                        }, 500);
+                        }, 1500); // Increased from 500ms for better reliability
 
                     } else if (data.event === "connected") {
                         console.log("✅ Twilio connected");
