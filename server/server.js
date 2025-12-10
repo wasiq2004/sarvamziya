@@ -102,7 +102,7 @@ if (!process.env.ELEVEN_LABS_API_KEY) {
 }
 console.log("Twilio Basic Service initialized");
 // ================= CORS ==================
-const FRONTEND_URL = "https://ziyavoice.aspirentech.com";
+const FRONTEND_URL = "https://benevolent-custard-76836b.netlify.app";
 
 const corsOptions = {
   origin: [
@@ -2148,8 +2148,19 @@ app.post('/api/twilio/voice', async (req, res) => {
       return res.send(response.toString());
     }
 
-    const appUrl = process.env.APP_URL;
-    if (!appUrl) {
+    // Determine the host to use for the WebSocket connection
+    // We prioritize BACKEND_URL, then RAILWAY_PUBLIC_DOMAIN, then APP_URL
+    let streamHost = process.env.BACKEND_URL;
+
+    if (!streamHost && process.env.RAILWAY_PUBLIC_DOMAIN) {
+      streamHost = `https://${process.env.RAILWAY_PUBLIC_DOMAIN}`;
+    }
+
+    if (!streamHost) {
+      streamHost = process.env.APP_URL;
+    }
+
+    if (!streamHost) {
       console.error('❌ APP_URL not configured!');
       const VoiceResponse = require('twilio').twiml.VoiceResponse;
       const response = new VoiceResponse();
@@ -2159,7 +2170,7 @@ app.post('/api/twilio/voice', async (req, res) => {
       return res.send(response.toString());
     }
 
-    const wsUrl = appUrl.replace('https://', 'wss://').replace('http://', 'ws://');
+    const wsUrl = streamHost.replace('https://', 'wss://').replace('http://', 'ws://');
     const actualCallId = callId || CallSid;
     const streamUrl = `${wsUrl}/api/call?callId=${actualCallId}&agentId=${agentId}&contactId=${CallSid}`;
 
@@ -3268,72 +3279,7 @@ app.post('/api/campaigns/:id/stop', async (req, res) => {
   }
 });
 // Process campaign calls (runs in background)
-async function processCampaignCalls(campaignId, userId, campaign, records) {
-  console.log(`Processing campaign ${campaignId} with ${records.length} records`);
 
-  // Get verified Twilio numbers
-  const verifiedNumbers = await twilioService.getVerifiedNumbers(userId);
-  const twilioNumber = verifiedNumbers.find(num => num.phoneNumber === campaign.callerPhone);
-
-  if (!twilioNumber) {
-    console.error('Twilio number not found:', campaign.callerPhone);
-    return;
-  }
-  // Process records sequentially with delay
-  for (const record of records) {
-    try {
-      // Check if campaign is still running
-      const currentCampaign = await campaignService.getCampaign(campaignId, userId);
-      if (currentCampaign.status !== 'running') {
-        console.log('Campaign stopped, exiting...');
-        break;
-      }
-      // Update record status to in-progress
-      await campaignService.updateRecordStatus(record.id, 'in-progress');
-      // Make the call
-      const callId = uuidv4();
-      const appUrl = process.env.APP_URL;
-      const cleanAppUrl = appUrl.replace(/\/$/, '');
-
-      const call = await twilioService.createCall({
-        userId: userId,
-        twilioNumberId: twilioNumber.id,
-        to: record.phone,
-        agentId: campaign.agentId,
-        callId: callId,
-        appUrl: cleanAppUrl
-      });
-      // ✅ Log all incoming HTTP requests to spot patterns
-      app.use((req, res, next) => {
-        const isWebSocket = req.headers.upgrade === 'websocket';
-        if (isWebSocket || req.url.includes('/api/call') || req.url.includes('/api/twilio')) {
-          console.log(`📥 ${req.method} ${req.url}`, {
-            headers: {
-              upgrade: req.headers.upgrade,
-              connection: req.headers.connection,
-              'user-agent': req.headers['user-agent']?.substring(0, 50)
-            }
-          });
-        }
-        next();
-      });
-      // Update record with call SID
-      await campaignService.updateRecordCallSid(record.id, call.sid);
-
-      console.log(`Call initiated for ${record.phone}: ${call.sid}`);
-
-      // Wait 30 seconds before next call (to avoid rate limits)
-      await new Promise(resolve => setTimeout(resolve, 30000));
-
-    } catch (error) {
-      console.error(`Error calling ${record.phone}:`, error);
-      await campaignService.updateRecordStatus(record.id, 'failed');
-      await campaignService.incrementRecordRetry(record.id);
-    }
-  }
-
-  console.log(`Campaign ${campaignId} processing complete`);
-}
 
 app.get("/db-conn-status", async (req, res) => {
   try {
@@ -3365,7 +3311,9 @@ app.use((req, res, next) => {
 // Start server and bind to 0.0.0.0 for Railway
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server listening on port ${PORT}`);
-  console.log(`📡 WebSocket endpoint: wss://ziyavoice-production.up.railway.app/api/call`);
+  const streamHost = process.env.BACKEND_URL || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null) || process.env.APP_URL || 'http://localhost:5000';
+  const wsUrl = streamHost.replace('https://', 'wss://').replace('http://', 'ws://');
+  console.log(`📡 WebSocket endpoint: ${wsUrl}/api/call`);
   console.log(`🌐 Frontend URL: ${FRONTEND_URL}`);
   console.log(`🔧 Environment: ${process.env.NODE_ENV || 'development'}`);
 });
