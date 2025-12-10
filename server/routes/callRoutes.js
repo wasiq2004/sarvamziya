@@ -22,40 +22,38 @@ router.get('/:userId', async (req, res) => {
 
         // Build WHERE clause with user isolation
         let whereConditions = ['c.user_id = ?'];
-        let queryParams = [userId];
+        let filterParams = [userId];
 
         // Add optional filters
         if (agentId) {
             whereConditions.push('c.agent_id = ?');
-            queryParams.push(agentId);
+            filterParams.push(agentId);
         }
 
         if (callType) {
             whereConditions.push('c.call_type = ?');
-            queryParams.push(callType);
+            filterParams.push(callType);
         }
 
         if (startDate) {
             whereConditions.push('c.started_at >= ?');
-            queryParams.push(startDate);
+            filterParams.push(startDate);
         }
 
         if (endDate) {
             whereConditions.push('c.started_at <= ?');
-            queryParams.push(endDate);
+            filterParams.push(endDate);
         }
 
         const whereClause = whereConditions.join(' AND ');
 
         // Get total count
-        const [countResult] = await mysqlPool.execute(
-            `SELECT COUNT(*) as total FROM calls c WHERE ${whereClause}`,
-            queryParams
-        );
+        const countQuery = `SELECT COUNT(*) as total FROM calls c WHERE ${whereClause}`;
+        const [countResult] = await mysqlPool.execute(countQuery, filterParams);
         const total = countResult[0].total;
 
         // Get paginated results with agent name
-        const query = `
+        const selectQuery = `
             SELECT 
                 c.id,
                 c.user_id,
@@ -79,10 +77,10 @@ router.get('/:userId', async (req, res) => {
             LIMIT ? OFFSET ?
         `;
 
-        // Create a new array with the same filter params plus limit and offset
-        const selectParams = [...queryParams, parseInt(limit), parseInt(offset)];
+        // Create params array for SELECT query: filters + limit + offset
+        const selectParams = [...filterParams, parseInt(limit), parseInt(offset)];
 
-        const [calls] = await mysqlPool.execute(query, selectParams);
+        const [calls] = await mysqlPool.execute(selectQuery, selectParams);
 
         // Format response
         const formattedCalls = calls.map(call => ({
@@ -90,14 +88,14 @@ router.get('/:userId', async (req, res) => {
             callSid: call.call_sid,
             fromNumber: call.from_number,
             toNumber: call.to_number,
-            direction: null, // Column doesn't exist in production
+            direction: null,
             status: call.status,
             callType: call.call_type || 'web_call',
             timestamp: call.started_at,
             startedAt: call.started_at,
             endedAt: call.ended_at,
             duration: call.duration || 0,
-            recordingUrl: null, // Column doesn't exist in production
+            recordingUrl: null,
             agentId: call.agent_id,
             agentName: call.agent_name || 'Unknown Agent',
             provider: call.provider,
