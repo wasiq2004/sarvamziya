@@ -159,8 +159,7 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
                     '-ar', '8000',         // Output sample rate: 8kHz
                     '-ac', '1',            // Output channels: mono
                     '-acodec', 'pcm_mulaw', // Codec: µ-law
-                    '-f', 'mulaw',         // Output format: raw mulaw
-                    '-loglevel', 'error',  // Only show errors
+                    '-f', 'au',            // AU format (has 24-byte header we can strip)
                     'pipe:1'               // Output to stdout
                 ];
             } else {
@@ -172,8 +171,7 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
                     '-ar', '8000',         // Sample rate: 8kHz
                     '-ac', '1',            // Channels: mono
                     '-acodec', 'pcm_mulaw', // Codec: µ-law
-                    '-f', 'mulaw',         // Output format: raw mulaw
-                    '-loglevel', 'error',  // Only show errors
+                    '-f', 'au',            // AU format (has 24-byte header we can strip)
                     'pipe:1'               // Output to stdout
                 ];
             }
@@ -194,8 +192,12 @@ async function convertToUlaw(audioBuffer, sourceFormat) {
 
             ffmpeg.on('close', (code) => {
                 if (code === 0) {
-                    const ulawBuffer = Buffer.concat(chunks);
-                    console.log(`[TTS] Conversion successful: ${ulawBuffer.length} bytes`);
+                    const fullBuffer = Buffer.concat(chunks);
+
+                    // AU format has a 24-byte header, strip it to get raw µ-law
+                    const ulawBuffer = fullBuffer.slice(24);
+
+                    console.log(`[TTS] Conversion successful: ${ulawBuffer.length} bytes (stripped AU header)`);
                     resolve(ulawBuffer);
                 } else {
                     console.error(`[TTS] ffmpeg failed with code ${code}`);
