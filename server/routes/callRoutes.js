@@ -79,9 +79,10 @@ router.get('/:userId', async (req, res) => {
             LIMIT ? OFFSET ?
         `;
 
-        queryParams.push(parseInt(limit), parseInt(offset));
+        // Create a new array with the same filter params plus limit and offset
+        const selectParams = [...queryParams, parseInt(limit), parseInt(offset)];
 
-        const [calls] = await mysqlPool.execute(query, queryParams);
+        const [calls] = await mysqlPool.execute(query, selectParams);
 
         // Format response
         const formattedCalls = calls.map(call => ({
