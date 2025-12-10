@@ -255,7 +255,25 @@ class MediaStreamHandler {
                             console.log("⚠️  Deepgram connection closed");
                         });
 
-                        // Send greeting after a short delay
+                        // ✅ CRITICAL: Send silence immediately to keep Twilio connection alive
+                        // Twilio may disconnect if it doesn't receive any audio within a few seconds
+                        if (session.isReady && session.streamSid) {
+                            console.log("🔇 Sending initial silence to keep connection alive...");
+                            const silenceBuffer = Buffer.alloc(160, 0xFF); // µ-law silence (160 bytes = 20ms)
+                            const base64Silence = silenceBuffer.toString('base64');
+
+                            // Send a few silence packets
+                            for (let i = 0; i < 5; i++) {
+                                session.ws.send(JSON.stringify({
+                                    event: "media",
+                                    streamSid: session.streamSid,
+                                    media: { payload: base64Silence }
+                                }));
+                            }
+                            console.log("✅ Silence packets sent");
+                        }
+
+                        // Send greeting after a short delay (reduced from 1500ms)
                         setTimeout(async () => {
                             try {
                                 console.log(`\n========== SENDING GREETING ==========`);
@@ -282,7 +300,7 @@ class MediaStreamHandler {
                                 console.error("❌ Error stack:", err.stack);
                                 console.log(`========================================\n`);
                             }
-                        }, 1500); // Increased from 500ms for better reliability
+                        }, 800); // Optimized timing
 
                     } else if (data.event === "connected") {
                         console.log("✅ Twilio connected");
