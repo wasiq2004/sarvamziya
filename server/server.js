@@ -62,8 +62,29 @@ const googleSheetsService = require('./services/googleSheetsService.js');
 // Initialize Google Sheets on server startup
 googleSheetsService.initialize();
 // Initialize MediaStreamHandler for voice call pipeline
-let mediaStreamHandler = null;
 const agentService = new AgentService(mysqlPool);
+
+// Initialize MediaStreamHandler (for Twilio integration)
+let mediaStreamHandler = null;
+try {
+  const deepgramKey = process.env.DEEPGRAM_API_KEY;
+  const geminiKey = process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
+
+  if (deepgramKey && geminiKey) {
+    mediaStreamHandler = new MediaStreamHandler(deepgramKey, geminiKey, campaignService);
+    console.log('✅ MediaStreamHandler initialized');
+
+    // Mount WebSocket route for Twilio
+    app.ws('/api/call', (ws, req) => {
+      mediaStreamHandler.handleConnection(ws, req);
+    });
+    console.log('✅ Twilio WebSocket route mounted at /api/call');
+  } else {
+    console.warn('⚠️ MediaStreamHandler skipped: Missing API keys');
+  }
+} catch (err) {
+  console.error('❌ Error initializing MediaStreamHandler:', err);
+}
 
 // Initialize Voice Sync Service
 const voiceSyncService = new VoiceSyncService(mysqlPool);
@@ -119,6 +140,45 @@ app.options("*", cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+// === Twilio Voice Webhooks ===
+app.post('/api/twilio/voice', (req, res) => {
+  try {
+    const { userId, agentId, callId } = req.query;
+    const host = req.get('host');
+    // Determine protocol based on incoming request or force wss in production
+    const isLocal = host.includes('localhost') || host.includes('127.0.0.1');
+    const wsProtocol = isLocal ? 'ws' : 'wss';
+    const wssUrl = `${wsProtocol}://${host}/api/call`;
+
+    console.log(`📞 Generating TwiML for Outbound Call:`);
+    console.log(`   Resulting Stream URL: ${wssUrl}`);
+    console.log(`   Params: userId=${userId}, agentId=${agentId}, callId=${callId}`);
+
+    const twiml = new twilio.twiml.VoiceResponse();
+    // Optional: Add a brief pause to allow connection to stabilize
+    twiml.pause({ length: 1 });
+    const connect = twiml.connect();
+    const stream = connect.stream({ url: wssUrl });
+
+    if (userId) stream.parameter({ name: 'userId', value: userId });
+    if (agentId) stream.parameter({ name: 'agentId', value: agentId });
+    if (callId) stream.parameter({ name: 'callId', value: callId });
+
+    res.type('text/xml');
+    res.send(twiml.toString());
+  } catch (err) {
+    console.error('❌ Error generating TwiML:', err);
+    res.status(500).send('Error generating TwiML');
+  }
+});
+
+app.post('/api/twilio/callback', (req, res) => {
+  console.log(`📞 Twilio Call Status Update: ${req.body.CallSid} = ${req.body.CallStatus}`);
+  if (req.body.CallDuration) console.log(`   Duration: ${req.body.CallDuration}s`);
+  res.sendStatus(200);
+});
+// =============================
 
 // Initialize and mount voice routes
 app.use('/api/voices', initVoiceSync(mysqlPool));
