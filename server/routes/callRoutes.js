@@ -62,7 +62,6 @@ router.get('/:userId', async (req, res) => {
                 c.call_sid,
                 c.from_number,
                 c.to_number,
-                c.direction,
                 c.status,
                 c.call_type,
                 c.started_at,
@@ -88,7 +87,7 @@ router.get('/:userId', async (req, res) => {
             callSid: call.call_sid,
             fromNumber: call.from_number,
             toNumber: call.to_number,
-            direction: call.direction,
+            direction: null, // Column doesn't exist in production
             status: call.status,
             callType: call.call_type || 'web_call',
             timestamp: call.started_at, // Use started_at as timestamp
