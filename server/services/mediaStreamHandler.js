@@ -227,6 +227,22 @@ class MediaStreamHandler {
                             console.log(`ℹ️  No agentId provided, using default voice: ${agentVoiceId}`);
                         }
 
+                        // Check user balance before starting call
+                        if (userId && this.walletService) {
+                            const balanceCheck = await this.walletService.checkBalanceForCall(userId, 0.10);
+                            if (!balanceCheck.allowed) {
+                                console.error(`❌ Insufficient balance for user ${userId}: ${balanceCheck.message}`);
+                                // Send error to Twilio and close connection
+                                ws.send(JSON.stringify({
+                                    event: 'error',
+                                    message: balanceCheck.message
+                                }));
+                                ws.close();
+                                return;
+                            }
+                            console.log(`✅ Balance check passed: $${balanceCheck.balance.toFixed(4)}`);
+                        }
+
                         // Create session with the correct voice ID
                         session = this.createSession(callId, agentPrompt, agentVoiceId, ws, userId, agentId);
                         session.tools = tools; // Store tools in session
