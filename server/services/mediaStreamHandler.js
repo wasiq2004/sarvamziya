@@ -125,6 +125,7 @@ class MediaStreamHandler {
                         let agentPrompt = "You are a helpful AI assistant.";
                         let agentVoiceId = "21m00Tcm4TlvDq8ikWAM"; // Default voice
                         let greetingMessage = "Hello! How can I help you today?";
+                        let tools = [];
 
                         if (agentId) {
                             try {
@@ -145,6 +146,16 @@ class MediaStreamHandler {
 
                                     agentPrompt = agent.identity || agentPrompt;
 
+                                    // Process Tools
+                                    if (agent.settings && agent.settings.tools && agent.settings.tools.length > 0) {
+                                        tools = agent.settings.tools;
+                                        const toolDescriptions = tools.map(tool =>
+                                            `- ${tool.name}: ${tool.description} (Parameters: ${tool.parameters?.map(p => `${p.name} (${p.type})${p.required ? ' [required]' : ''}`).join(', ') || 'None'})`
+                                        ).join('\n');
+
+                                        agentPrompt += `\n\nAvailable Tools:\n${toolDescriptions}\n\nWhen you need to collect information from the user, ask for the required parameters. When all required information is collected, respond with a JSON object in the format: {"tool": "tool_name", "data": {"param1": "value1", "param2": "value2"}}. Do NOT add any other text before or after the JSON.`;
+                                    }
+
                                     // ✅ CRITICAL: Use the voice ID directly from database
                                     if (agent.voiceId) {
                                         agentVoiceId = agent.voiceId;
@@ -159,7 +170,7 @@ class MediaStreamHandler {
                                     } else {
                                         console.log(`👋 Using default greeting: "${greetingMessage}"`);
                                     }
-                                    console.log(`✅ Loaded agent: ${agent.name}`);
+                                    console.log(`✅ Loaded agent: ${agent.name} with ${tools.length} tools`);
                                     console.log(`   Voice ID: ${agentVoiceId}`);
                                     console.log(`   Prompt: ${agentPrompt.substring(0, 100)}...`);
                                 } else {
@@ -175,6 +186,7 @@ class MediaStreamHandler {
 
                         // Create session with the correct voice ID
                         session = this.createSession(callId, agentPrompt, agentVoiceId, ws);
+                        session.tools = tools; // Store tools in session
                         console.log(`✅ Session created with voice ID: ${session.agentVoiceId}`);
 
                         session.greetingMessage = greetingMessage;
@@ -352,12 +364,55 @@ class MediaStreamHandler {
     }
     async callLLM(session) {
         try {
+            console.log("🧠 Calling Gemini LLM...");
             const response = await this.llmService.generateContent({
                 model: "models/gemini-2.5-flash",
                 contents: session.context,
                 config: { systemInstruction: session.agentPrompt },
             });
-            return response.text;
+            let text = response.text;
+            console.log("🧠 Gemini response received:", text);
+
+            // Check for Tool Call (JSON format)
+            try {
+                // Remove potential markdown code blocks if present
+                const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                if (cleanText.startsWith('{') && cleanText.endsWith('}')) {
+                    const parsed = JSON.parse(cleanText);
+
+                    if (parsed.tool && parsed.data) {
+                        console.log(`🛠️ Tool usage detected: ${parsed.tool}`);
+
+                        // Handle Google Sheets Tool
+                        if (parsed.tool.includes('Sheet') || parsed.tool === 'addToSheet' || parsed.tool === 'saveData') {
+                            const googleSheetsService = require('./googleSheetsService.js');
+
+                            // Find the tool definition to get the Spreadsheet ID
+                            let spreadsheetId;
+                            if (session.tools && session.tools.length > 0) {
+                                const tool = session.tools.find(t => t.name === parsed.tool);
+                                if (tool) spreadsheetId = googleSheetsService.extractSpreadsheetId(tool.webhookUrl); // In UI, URL is stored in webhookUrl
+                            }
+
+                            if (!spreadsheetId) {
+                                console.error('Spreadsheet URL not found in tool configuration');
+                            } else {
+                                await googleSheetsService.appendGenericRow(spreadsheetId, parsed.data);
+                            }
+
+                            // Add tool result to context and ask LLM for final response
+                            this.appendToContext(session, JSON.stringify({ tool: parsed.tool, status: "success", message: "Data saved successfully" }), "user"); // mimic user/system confirmation
+
+                            // Recursively call LLM to get the verbal response
+                            return await this.callLLM(session);
+                        }
+                    }
+                }
+            } catch (jsonError) {
+                // Not a valid JSON tool call, just regular text -> continue
+            }
+
+            return text;
         } catch (err) {
             console.error("❌ LLM error:", err);
             return "I apologize, I'm having trouble processing that right now.";
