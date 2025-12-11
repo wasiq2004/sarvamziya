@@ -89,11 +89,20 @@ const geminiApiKey = process.env.GOOGLE_GEMINI_API_KEY || process.env.GEMINI_API
 console.log('Deepgram API Key configured:', !!deepgramApiKey);
 console.log('Gemini API Key configured:', !!geminiApiKey);
 
-const deepgramBrowserHandler = new DeepgramBrowserHandler(deepgramApiKey, geminiApiKey, mysqlPool);
-app.ws('/voice-stream-deepgram', (ws, req) => {
-  deepgramBrowserHandler.handleConnection(ws, req);
-});
-console.log('✅ Deepgram Browser Handler initialized at /voice-stream-deepgram');
+let deepgramBrowserHandler;
+if (deepgramApiKey && geminiApiKey) {
+  try {
+    deepgramBrowserHandler = new DeepgramBrowserHandler(deepgramApiKey, geminiApiKey, mysqlPool);
+    app.ws('/voice-stream-deepgram', (ws, req) => {
+      deepgramBrowserHandler.handleConnection(ws, req);
+    });
+    console.log('✅ Deepgram Browser Handler initialized at /voice-stream-deepgram');
+  } catch (error) {
+    console.error('Failed to initialize DeepgramBrowserHandler:', error.message);
+  }
+} else {
+  console.warn('⚠️ DeepgramBrowserHandler not initialized (missing API keys)');
+}
 
 // === ADD THIS BLOCK ===
 if (!process.env.ELEVEN_LABS_API_KEY) {
@@ -118,8 +127,8 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions));
 
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Twilio webhooks are defined later in the file (see line ~2170)
 
