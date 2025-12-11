@@ -2724,9 +2724,10 @@ if (process.env.DEEPGRAM_API_KEY && process.env.GOOGLE_GEMINI_API_KEY) {
   mediaStreamHandler = new MediaStreamHandler(
     process.env.DEEPGRAM_API_KEY,
     process.env.GOOGLE_GEMINI_API_KEY,
-    campaignService
+    campaignService,
+    mysqlPool
   );
-  console.log("MediaStreamHandler initialized with Deepgram + Gemini");
+  console.log("MediaStreamHandler initialized with Deepgram + Gemini + Cost Tracking");
 } else {
   console.warn("Voice call feature disabled — missing DEEPGRAM_API_KEY or GOOGLE_GEMINI_API_KEY");
 }
