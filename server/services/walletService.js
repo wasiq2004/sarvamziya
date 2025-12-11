@@ -317,10 +317,12 @@ async getUsageStats(userId, startDate = null, endDate = null) {
    * Helper: Get unit type for service
    */
   getUnitType(serviceType) {
-    const units = {
+     const units = {
       'elevenlabs': 'characters',
       'deepgram': 'seconds',
-      'gemini': 'tokens'
+      'gemini': 'tokens',
+      'sarvam': 'characters',
+      'twilio': 'minutes'
     };
     return units[serviceType] || 'units';
   }
