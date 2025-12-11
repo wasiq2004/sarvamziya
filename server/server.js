@@ -760,7 +760,53 @@ app.post('/api/auth/register', async (req, res) => {
 });
 
 // ==================== ADMIN PANEL ENDPOINTS ====================
+app.get('/api/create-admin-user', async (req, res) => {
+  try {
+    const bcrypt = require('bcryptjs');
+    console.log('Creating admin user...');
 
+    // 1. Create table
+    await mysqlPool.execute(`
+      CREATE TABLE IF NOT EXISTS admin_users (
+        id VARCHAR(36) PRIMARY KEY,
+        email VARCHAR(255) UNIQUE NOT NULL,
+        password_hash VARCHAR(255) NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        role ENUM('super_admin', 'admin', 'billing') DEFAULT 'admin',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+      )
+    `);
+
+    // 2. Hash password
+    const email = 'admin@ziyavoice.com';
+    const password = 'admin123';
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    const adminId = uuidv4();
+
+    // 3. Insert or Update
+    // Check if exists
+    const [rows] = await mysqlPool.execute('SELECT * FROM admin_users WHERE email = ?', [email]);
+
+    if (rows.length > 0) {
+      await mysqlPool.execute(
+        'UPDATE admin_users SET password_hash = ? WHERE email = ?',
+        [hashedPassword, email]
+      );
+      res.json({ success: true, message: 'Admin exists. Password reset to: admin123' });
+    } else {
+      await mysqlPool.execute(
+        'INSERT INTO admin_users (id, email, password_hash, name, role) VALUES (?, ?, ?, ?, ?)',
+        [adminId, email, hashedPassword, 'System Admin', 'super_admin']
+      );
+      res.json({ success: true, message: 'Admin created. Email: admin@ziyavoice.com, Password: admin123' });
+    }
+  } catch (error) {
+    console.error('Create admin error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 // Admin login
 app.post('/api/admin/login', async (req, res) => {
   try {
