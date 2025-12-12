@@ -2642,13 +2642,13 @@ app.get('/api/campaigns/:id', async (req, res) => {
 // Create a new campaign
 app.post('/api/campaigns', async (req, res) => {
   try {
-    const { userId, agentId, name, description, contacts } = req.body;
+    const { userId, agentId, phoneNumberId, name, description, contacts } = req.body;
     if (!userId || !agentId || !name) {
       return res.status(400).json({ success: false, message: 'User ID, agent ID, and campaign name are required' });
     }
 
     // Create the campaign
-    const result = await campaignService.createCampaign(userId, agentId, name, description || '');
+    const result = await campaignService.createCampaign(userId, agentId, name, description || '', phoneNumberId);
 
     // Add contacts if provided
     if (contacts && contacts.length > 0) {
