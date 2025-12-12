@@ -321,6 +321,10 @@ class CampaignService {
      * Get all campaigns for a user
      */
     async getUserCampaigns(userId, limit = 50, offset = 0) {
+        // Ensure limit and offset are integers
+        const parsedLimit = parseInt(limit) || 50;
+        const parsedOffset = parseInt(offset) || 0;
+
         const [campaigns] = await this.mysqlPool.execute(
             `SELECT c.*, a.name as agent_name
        FROM campaigns c
@@ -328,7 +332,7 @@ class CampaignService {
        WHERE c.user_id = ?
        ORDER BY c.created_at DESC
        LIMIT ? OFFSET ?`,
-            [userId, limit, offset]
+            [userId, parsedLimit, parsedOffset]
         );
 
         return campaigns;
