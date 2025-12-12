@@ -1,27 +1,16 @@
 const nodeFetch = require("node-fetch");
 
-/**
- * TTS Controller
- * Unified interface for multiple TTS providers (ElevenLabs, Sarvam)
- * Handles provider selection and routing based on environment configuration
- */
-
-// Import TTS providers
 const { sarvamTTS } = require("./tts_sarvam.js");
 
-/**
- * Generate speech audio using the configured TTS provider
- * @param {string} text - The text to convert to speech
- * @param {Object} options - TTS options
- * @param {string} options.voiceId - Voice ID (for ElevenLabs)
- * @param {string} options.language - Target language code (for Sarvam)
- * @param {string} options.speaker - Speaker/voice name (for Sarvam)
- * @param {string} options.format - Audio format
- * @returns {Promise<Buffer>} - Audio buffer in ulaw_8000 format
- */
 async function generateTTS(text, options = {}) {
     // Known Sarvam speakers
-    const sarvamSpeakers = ['anushka', 'abhilash', 'chitra', 'meera', 'arvind', 'manisha', 'vidya', 'arya', 'karun', 'hitesh'];
+    const sarvamSpeakers = [
+        'anushka', 'abhilash', 'manisha', 'vidya', 'arya', 'karun', 'hitesh', 'aditya',
+        'isha', 'ritu', 'chirag', 'harsh', 'sakshi', 'priya', 'neha', 'rahul',
+        'pooja', 'rohan', 'simran', 'kavya', 'anjali', 'sneha', 'kiran', 'vikram',
+        'rajesh', 'sunita', 'tara', 'anirudh', 'kriti', 'ishaan', 'ratan', 'varun',
+        'manan', 'sumit', 'roopa', 'kabir', 'aayan', 'shubh'
+    ];
 
     // Auto-detect provider based on voice ID or speaker
     let provider = options.provider || process.env.TTS_PROVIDER;
@@ -68,29 +57,30 @@ async function generateTTS(text, options = {}) {
     }
 }
 
-/**
- * Generate TTS using Sarvam provider
- * @param {string} text - Text to synthesize
- * @param {Object} options - TTS options
- * @returns {Promise<Buffer>} - Audio buffer
- */
 async function generateSarvamTTS(text, options) {
     console.log("[TTS Controller] Routing to Sarvam TTS");
+    const validSarvamSpeakers = [
+        'anushka', 'abhilash', 'manisha', 'vidya', 'arya', 'karun', 'hitesh', 'aditya',
+        'isha', 'ritu', 'chirag', 'harsh', 'sakshi', 'priya', 'neha', 'rahul',
+        'pooja', 'rohan', 'simran', 'kavya', 'anjali', 'sneha', 'kiran', 'vikram',
+        'rajesh', 'sunita', 'tara', 'anirudh', 'kriti', 'ishaan', 'ratan', 'varun',
+        'manan', 'sumit', 'roopa', 'kabir', 'aayan', 'shubh'
+    ];
+    // Validate and sanitize speaker
+    let speaker = (options.speaker || options.voiceId || 'anushka').toLowerCase();
+    // If speaker is not in valid list, use default
+    if (!validSarvamSpeakers.includes(speaker)) {
+        console.log(`[TTS Controller] ⚠️  Invalid Sarvam speaker "${speaker}", using default "anushka"`);
+        speaker = 'anushka';
+    }
     return await sarvamTTS(text, {
         language: options.language,
-        speaker: options.speaker,
+        speaker: speaker,
         format: options.format,
         skipConversion: options.skipConversion,
     });
 }
 
-/**
- * Generate TTS using ElevenLabs provider
- * @param {string} text - Text to synthesize
- * @param {Object} options - TTS options
- * @param {string} options.voiceId - ElevenLabs voice ID
- * @returns {Promise<Buffer>} - Audio buffer
- */
 async function generateElevenLabsTTS(text, options) {
     console.log("[TTS Controller] Routing to ElevenLabs TTS");
 
@@ -146,10 +136,6 @@ async function generateElevenLabsTTS(text, options) {
     }
 }
 
-/**
- * Get ElevenLabs API key from environment
- * @returns {string|undefined} - API key
- */
 function getElevenLabsApiKey() {
     return process.env.ELEVEN_LABS_API_KEY || process.env.ELEVENLABS_API_KEY;
 }
