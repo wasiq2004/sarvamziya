@@ -46,6 +46,7 @@
     "passport": "^0.7.0",
     "passport-google-oauth20": "^2.0.0",
     "express-session": "^1.18.0",
+    "express-mysql-session": "^3.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.5",
