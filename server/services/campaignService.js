@@ -115,7 +115,7 @@ class CampaignService {
 
             // Get campaign details
             const [campaigns] = await this.mysqlPool.execute(
-                `SELECT c.*, a.voiceId, a.identity, a.settings
+                `SELECT c.*, a.voice_id, a.identity, a.settings
          FROM campaigns c
          JOIN agents a ON c.agent_id = a.id
          WHERE c.id = ?`,
