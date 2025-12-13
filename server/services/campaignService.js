@@ -136,7 +136,7 @@ class CampaignService {
                 'SELECT * FROM campaign_settings WHERE campaign_id = ?',
                 [campaignId]
             );
-            const campaignSettings = settings[0];
+            const campaignSettings = settings[0] || { call_interval_seconds: 5 };
 
             // Get pending contacts
             const [contacts] = await this.mysqlPool.execute(
@@ -169,7 +169,7 @@ class CampaignService {
                 await this.makeCall(campaignId, contact, campaign, agentSettings);
 
                 // Wait between calls
-                if (campaignSettings.call_interval_seconds > 0) {
+                if (campaignSettings && campaignSettings.call_interval_seconds > 0) {
                     await new Promise(resolve =>
                         setTimeout(resolve, campaignSettings.call_interval_seconds * 1000)
                     );
@@ -207,7 +207,7 @@ class CampaignService {
 
             // Get Twilio phone number for this user
             const [twilioNumbers] = await this.mysqlPool.execute(
-                'SELECT phone_number FROM user_twilio_numbers WHERE user_id = ? AND is_active = TRUE LIMIT 1',
+                'SELECT phone_number FROM user_twilio_numbers WHERE user_id = ? LIMIT 1',
                 [campaign.user_id]
             );
 
