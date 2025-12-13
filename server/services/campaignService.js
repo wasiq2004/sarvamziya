@@ -22,10 +22,11 @@ class CampaignService {
         try {
             const campaignId = uuidv4();
 
+            // Insert campaign without phone_number_id for now (can be set later via setCallerPhone)
             await this.mysqlPool.execute(
-                `INSERT INTO campaigns (id, user_id, agent_id, phone_number_id, name, description, status)
-         VALUES (?, ?, ?, ?, ?, ?, 'draft')`,
-                [campaignId, userId, agentId, phoneNumberId, name, description]
+                `INSERT INTO campaigns (id, user_id, agent_id, name, description, status)
+         VALUES (?, ?, ?, ?, ?, 'draft')`,
+                [campaignId, userId, agentId, name, description]
             );
 
             // Create default settings
@@ -381,7 +382,10 @@ class CampaignService {
             );
         }
     }
-     async setCallerPhone(campaignId, userId, phoneNumberId, agentId) {
+    /**
+     * Set caller phone and agent for a campaign
+     */
+    async setCallerPhone(campaignId, userId, phoneNumberId, agentId) {
         try {
             await this.mysqlPool.execute(
                 `UPDATE campaigns SET phone_number_id = ?, agent_id = ? WHERE id = ? AND user_id = ?`,
