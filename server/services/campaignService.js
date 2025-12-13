@@ -570,6 +570,113 @@ class CampaignService {
             throw error;
         }
     }
+
+    /**
+     * Delete a record/contact from a campaign
+     */
+    async deleteRecord(recordId, campaignId, userId) {
+        try {
+            // Verify the campaign belongs to the user
+            const [campaigns] = await this.mysqlPool.execute(
+                'SELECT id FROM campaigns WHERE id = ? AND user_id = ?',
+                [campaignId, userId]
+            );
+
+            if (campaigns.length === 0) {
+                throw new Error('Campaign not found or access denied');
+            }
+
+            // Delete the contact record
+            const [result] = await this.mysqlPool.execute(
+                'DELETE FROM campaign_contacts WHERE id = ? AND campaign_id = ?',
+                [recordId, campaignId]
+            );
+
+            if (result.affectedRows === 0) {
+                return null; // Record not found
+            }
+
+            // Update total contacts count
+            await this.mysqlPool.execute(
+                `UPDATE campaigns SET total_contacts = (
+          SELECT COUNT(*) FROM campaign_contacts WHERE campaign_id = ?
+        ) WHERE id = ?`,
+                [campaignId, campaignId]
+            );
+
+            return { success: true, message: 'Record deleted successfully' };
+        } catch (error) {
+            console.error('Error deleting record:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Update a campaign
+     */
+    async updateCampaign(campaignId, userId, campaignData) {
+        try {
+            const updates = [];
+            const values = [];
+
+            if (campaignData.name) {
+                updates.push('name = ?');
+                values.push(campaignData.name);
+            }
+            if (campaignData.description !== undefined) {
+                updates.push('description = ?');
+                values.push(campaignData.description);
+            }
+            if (campaignData.agent_id) {
+                updates.push('agent_id = ?');
+                values.push(campaignData.agent_id);
+            }
+            if (campaignData.phone_number_id) {
+                updates.push('phone_number_id = ?');
+                values.push(campaignData.phone_number_id);
+            }
+
+            if (updates.length === 0) {
+                throw new Error('No fields to update');
+            }
+
+            values.push(campaignId, userId);
+
+            await this.mysqlPool.execute(
+                `UPDATE campaigns SET ${updates.join(', ')} WHERE id = ? AND user_id = ?`,
+                values
+            );
+
+            return this.getCampaign(campaignId);
+        } catch (error) {
+            console.error('Error updating campaign:', error);
+            throw error;
+        }
+    }
+
+    /**
+     * Stop/pause a campaign
+     */
+    async stopCampaign(campaignId, userId) {
+        try {
+            await this.mysqlPool.execute(
+                `UPDATE campaigns SET status = 'paused' WHERE id = ? AND user_id = ?`,
+                [campaignId, userId]
+            );
+
+            // Update in-memory state
+            const campaignState = this.activeCampaigns.get(campaignId);
+            if (campaignState) {
+                campaignState.status = 'paused';
+            }
+
+            return { success: true, message: 'Campaign paused' };
+        } catch (error) {
+            console.error('Error stopping campaign:', error);
+            throw error;
+        }
+    }
 }
+
 
 module.exports = CampaignService;
