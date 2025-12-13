@@ -236,17 +236,32 @@ class CampaignService {
 
             console.log(`✅ Call initiated: ${call.sid}`);
 
-            // Create call record
+            // Create comprehensive call record for call history
             const callId = uuidv4();
             await this.mysqlPool.execute(
-                `INSERT INTO calls (id, user_id, agent_id, call_sid, from_number, to_number, status, call_type, started_at, timestamp, campaign_id)
-         VALUES (?, ?, ?, ?, ?, ?, 'in-progress', 'outbound', NOW(), NOW(), ?)`,
-                [callId, campaign.user_id, campaign.agent_id, call.sid, fromNumber, contact.phone_number, campaignId]
+                `INSERT INTO calls (
+                    id, user_id, agent_id, call_sid, from_number, to_number, 
+                    status, call_type, direction, started_at, timestamp, campaign_id
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)`,
+                [
+                    callId,
+                    campaign.user_id,
+                    campaign.agent_id,
+                    call.sid,
+                    fromNumber,
+                    contact.phone_number,
+                    'initiated',  // Initial status
+                    'outbound',   // call_type for campaign calls
+                    'outbound',   // direction
+                    campaignId
+                ]
             );
+
+            console.log(`📝 Call record created: ${callId} for contact ${contact.phone_number}`);
 
             // Update contact with call ID
             await this.mysqlPool.execute(
-                'UPDATE campaign_contacts SET call_id = ? WHERE id = ?',
+                'UPDATE campaign_contacts SET call_id = ?, status = \'calling\' WHERE id = ?',
                 [callId, contact.id]
             );
 
