@@ -2695,7 +2695,54 @@ app.delete('/api/campaigns/:id', async (req, res) => {
     res.status(500).json({ success: false, message: error.message });
   }
 });
+// Set caller phone for a campaign
+app.post('/api/campaigns/:id/set-caller-phone', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, callerPhone, agentId } = req.body;
+    if (!userId || !callerPhone) {
+      return res.status(400).json({ success: false, message: 'User ID and caller phone (ID) are required' });
+    }
+    // callerPhone is passed as phoneNumberId
+    const updatedCampaign = await campaignService.setCallerPhone(id, userId, callerPhone, agentId);
+    res.json({ success: true, campaign: updatedCampaign });
+  } catch (error) {
+    console.error('Error setting caller phone:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+// Import records (CSV)
+app.post('/api/campaigns/:id/import', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, csvData } = req.body;
+    if (!userId || !csvData) {
+      return res.status(400).json({ success: false, message: 'User ID and CSV data are required' });
+    }
 
+    const result = await campaignService.addContacts(id, csvData);
+    res.json(result);
+  } catch (error) {
+    console.error('Error importing records:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
+// Add single record
+app.post('/api/campaigns/:id/records', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { userId, phone } = req.body;
+    if (!userId || !phone) {
+      return res.status(400).json({ success: false, message: 'User ID and phone number are required' });
+    }
+
+    const result = await campaignService.addContacts(id, [{ phone_number: phone }]);
+    res.json(result);
+  } catch (error) {
+    console.error('Error adding record:', error);
+    res.status(500).json({ success: false, message: error.message });
+  }
+});
 // Add phone numbers to a campaign
 app.post('/api/campaigns/:id/phone-numbers', async (req, res) => {
   try {
