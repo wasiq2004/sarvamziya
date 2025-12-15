@@ -240,6 +240,13 @@ app.get('/api/wallet/balance/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
 
+    if (!userId) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID is required'
+      });
+    }
+
     const balance = await walletService.getBalance(userId);
 
     res.json({
@@ -249,6 +256,15 @@ app.get('/api/wallet/balance/:userId', async (req, res) => {
     });
   } catch (error) {
     console.error('Error fetching wallet balance:', error);
+
+    // Return 404 if user not found, 500 for other errors
+    if (error.message && error.message.includes('User not found')) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found. Please ensure the user is registered.'
+      });
+    }
+
     res.status(500).json({ success: false, message: error.message });
   }
 });
