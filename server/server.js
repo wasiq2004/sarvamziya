@@ -1273,9 +1273,9 @@ app.post('/api/google-sheets/log-call', async (req, res) => {
       });
     }
 
-    // Get record details
+    // Get record details from campaign_contacts table
     const [records] = await mysqlPool.execute(
-      'SELECT * FROM campaign_records WHERE id = ? AND campaign_id = ?',
+      'SELECT * FROM campaign_contacts WHERE id = ? AND campaign_id = ?',
       [recordId, campaignId]
     );
 
@@ -1298,14 +1298,14 @@ app.post('/api/google-sheets/log-call', async (req, res) => {
     // Log to Google Sheets
     const spreadsheetId = googleSheetsService.extractSpreadsheetId(campaign.google_sheet_url);
     const result = await googleSheetsService.logCallData(spreadsheetId, {
-      phone: record.phone,
-      callStatus: record.call_status,
-      duration: record.duration || 0,
-      callSid: record.call_sid,
-      recordingUrl: record.recording_url,
+      phone: record.phone_number,  // Fixed: use phone_number instead of phone
+      callStatus: record.status,    // Fixed: use status instead of call_status
+      duration: record.call_duration || 0,  // Fixed: use call_duration
+      callSid: record.call_id,      // Fixed: use call_id instead of call_sid
+      recordingUrl: '',             // campaign_contacts doesn't have recording_url
       agentName: agentName,
       campaignName: campaign.name,
-      retries: record.retries || 0,
+      retries: record.attempts || 0,  // Fixed: use attempts instead of retries
       metadata: record.metadata ? JSON.parse(record.metadata) : {}
     });
 
@@ -1362,36 +1362,11 @@ app.post('/api/twilio/status', async (req, res) => {
         values
       );
 
-      // Also update campaign record and Google Sheets
-      const [callRecords] = await database.execute(
-        'SELECT c.*, cr.campaign_id, camp.google_sheet_url FROM calls c LEFT JOIN campaign_records cr ON c.call_sid = cr.call_sid LEFT JOIN campaigns camp ON cr.campaign_id = camp.id WHERE c.id = ?',
-        [callId]
-      );
+      // Note: Campaign contact updates and Google Sheets logging are handled by
+      // campaignService.updateContactAfterCall() which is called from the WebSocket handler
+      // when the call completes. This avoids duplicate logic and schema mismatches.
 
-      if (callRecords.length > 0 && callRecords[0].campaign_id) {
-        const callRecord = callRecords[0];
-
-        // Update campaign record
-        await database.execute(
-          'UPDATE campaign_records SET call_status = ?, duration = ?, recording_url = ? WHERE call_sid = ?',
-          [CallStatus, CallDuration || 0, RecordingUrl || null, CallSid]
-        );
-
-        // Update Google Sheets if configured
-        if (callRecord.google_sheet_url) {
-          const spreadsheetId = googleSheetsService.extractSpreadsheetId(callRecord.google_sheet_url);
-          if (spreadsheetId) {
-            await googleSheetsService.updateCallData(spreadsheetId, CallSid, {
-              callStatus: CallStatus,
-              duration: CallDuration ? parseInt(CallDuration) : 0,
-              recordingUrl: RecordingUrl || '',
-              notes: `Call ${CallStatus}`
-            });
-          }
-        }
-      }
-
-      console.log('Call status updated in database and Google Sheets:', callId, CallStatus);
+      console.log('Call status updated in database:', callId, CallStatus);
     }
 
     res.status(200).send('OK');
