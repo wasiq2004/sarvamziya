@@ -251,7 +251,7 @@ class CampaignService {
                     fromNumber,
                     contact.phone_number,
                     'initiated',  // Initial status
-                    'outbound',   // call_type for campaign calls
+                    'twilio_outbound',   // Must match ENUM: 'twilio_inbound', 'twilio_outbound', 'web_call'
                     campaignId
                 ]
             );
