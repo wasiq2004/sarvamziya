@@ -20,7 +20,7 @@ class CostCalculator {
         const now = Date.now();
         if (now - this.lastCacheUpdate > this.cacheExpiry) {
             const [pricing] = await this.mysqlPool.execute(
-                'SELECT * FROM service_pricing WHERE is_active = TRUE'
+                'SELECT * FROM service_pricing'
             );
 
             this.pricingCache.clear();
