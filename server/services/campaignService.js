@@ -87,6 +87,39 @@ class CampaignService {
                 throw new Error('Campaign is already running');
             }
 
+            // Get campaign details to check phone_number_id and agent_id
+            const [campaigns] = await this.mysqlPool.execute(
+                'SELECT * FROM campaigns WHERE id = ? AND user_id = ?',
+                [campaignId, userId]
+            );
+
+            if (campaigns.length === 0) {
+                throw new Error('Campaign not found');
+            }
+
+            const campaign = campaigns[0];
+
+            // Validate phone_number_id and agent_id
+            if (!campaign.phone_number_id || !campaign.agent_id) {
+                // Try to auto-assign from user's first available phone number
+                const [phoneNumbers] = await this.mysqlPool.execute(
+                    'SELECT id, agent_id FROM user_twilio_numbers WHERE user_id = ? AND agent_id IS NOT NULL LIMIT 1',
+                    [userId]
+                );
+
+                if (phoneNumbers.length === 0) {
+                    throw new Error('Please set a caller phone number with an assigned agent before starting the campaign. Go to campaign settings and click "Set Caller Phone".');
+                }
+
+                // Auto-assign the first available phone number
+                await this.mysqlPool.execute(
+                    'UPDATE campaigns SET phone_number_id = ?, agent_id = ? WHERE id = ?',
+                    [phoneNumbers[0].id, phoneNumbers[0].agent_id, campaignId]
+                );
+
+                console.log(`✅ Auto-assigned phone number ${phoneNumbers[0].id} to campaign ${campaignId}`);
+            }
+
             // Check if user has sufficient balance
             const balanceCheck = await this.walletService.checkBalanceForCall(userId, 1.00);
             if (!balanceCheck.allowed) {
